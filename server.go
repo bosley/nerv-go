@@ -71,7 +71,6 @@ func (nrvs *NervServer) Start() error {
 
 	*/
 
-	http.HandleFunc("/", nrvs.handleMain())
 	http.HandleFunc(endpointSubmit, nrvs.handleSubmission())
 	http.HandleFunc(endpointRegister, nrvs.handleRegistration())
 	http.HandleFunc(endpointNewTopic, nrvs.handleNewTopic())
@@ -112,13 +111,6 @@ func (nrvs *NervServer) Stop() error {
 	nrvs.wg.Wait()
 	nrvs.wg = nil
 	return nil
-}
-
-func (nrvs *NervServer) handleMain() func(http.ResponseWriter, *http.Request) {
-	return func(writer http.ResponseWriter, req *http.Request) {
-		writer.WriteHeader(418)
-		writer.Write([]byte("i'm a teapot"))
-	}
 }
 
 func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Request) {
@@ -230,8 +222,30 @@ func (nrvs *NervServer) handleNewTopic() func(http.ResponseWriter, *http.Request
 
 func (nrvs *NervServer) handleSubscribe() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
-		writer.WriteHeader(418)
-		writer.Write([]byte("i'm a teapot"))
+
+		body, err := ioutil.ReadAll(req.Body)
+
+		if err != nil {
+			slog.Error("nerv:server:handleSubscribe", "err", err.Error())
+			writer.WriteHeader(400)
+			return
+		}
+
+		slog.Debug("nerv:server:handleSubscribe", "body", string(body))
+
+		var reqWrapper RequestSubscription
+		if err := json.Unmarshal(body, &reqWrapper); err != nil {
+			writer.WriteHeader(400)
+			return
+		}
+
+		err = nrvs.engine.subscribeTo(reqWrapper.Topic, reqWrapper.SubscriberId)
+		if err != nil {
+			writer.WriteHeader(409)
+			writer.Write([]byte(err.Error()))
+			return
+		}
+		writer.WriteHeader(200)
 	}
 }
 
@@ -242,7 +256,6 @@ func setupSubscriptionFwd(address string, subscriber string) Subscriber {
 	return Subscriber{
 		Id: subscriber,
 		Fn: func(event *Event) {
-
 			// Don't send them back messages that they sent us
 			if event.Producer == subscriber {
 				return

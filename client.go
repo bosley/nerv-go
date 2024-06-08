@@ -3,8 +3,13 @@ package nerv
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+)
+
+const (
+	protocolString = "http://"
 )
 
 type RemoteSubmitter struct {
@@ -22,7 +27,6 @@ type RequestSubscriberRegistration struct {
 }
 
 type RequestSubscription struct {
-	HostAddress  string
 	Topic        string
 	SubscriberId string
 }
@@ -36,15 +40,19 @@ type SubmissionResponse struct {
 	Body   string
 }
 
-func SubmitNewTopicRequest(address string, topicCfg TopicCfg) (*SubmissionResponse, error) {
+func fmtEndpoint(address string, endpoint string) string {
+	return fmt.Sprintf("%s%s%s", protocolString, address, endpoint)
+}
+
+func SubmitNewTopicRequest(address string, topicCfg *TopicCfg) (*SubmissionResponse, error) {
 	out := RequestNewTopic{
-		Config: topicCfg,
+		Config: *topicCfg,
 	}
 	encoded, err := json.Marshal(out)
 	if err != nil {
 		return nil, err
 	}
-	return send(address, encoded)
+	return send(fmtEndpoint(address, endpointNewTopic), encoded)
 }
 
 func SubmitRegistrationRequest(remoteAddress string, localAddress string, receiverId string) (*SubmissionResponse, error) {
@@ -56,12 +64,11 @@ func SubmitRegistrationRequest(remoteAddress string, localAddress string, receiv
 	if err != nil {
 		return nil, err
 	}
-	return send(remoteAddress, encoded)
+	return send(fmtEndpoint(remoteAddress, endpointRegister), encoded)
 }
 
-func SubmitSubscriptionRequest(remoteAddress string, localAddress string, topic string, subscriberId string) (*SubmissionResponse, error) {
+func SubmitSubscriptionRequest(address string, topic string, subscriberId string) (*SubmissionResponse, error) {
 	out := RequestSubscription{
-		HostAddress:  localAddress,
 		Topic:        topic,
 		SubscriberId: subscriberId,
 	}
@@ -69,7 +76,7 @@ func SubmitSubscriptionRequest(remoteAddress string, localAddress string, topic 
 	if err != nil {
 		return nil, err
 	}
-	return send(remoteAddress, encoded)
+	return send(fmtEndpoint(address, endpointSubscribe), encoded)
 }
 
 func SubmitEvent(address string, event *Event) (*SubmissionResponse, error) {
@@ -80,7 +87,7 @@ func SubmitEvent(address string, event *Event) (*SubmissionResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	return send(address, encoded)
+	return send(fmtEndpoint(address, endpointSubmit), encoded)
 }
 
 func send(address string, data []byte) (*SubmissionResponse, error) {

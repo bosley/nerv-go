@@ -1,7 +1,6 @@
 package nerv
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -59,20 +58,22 @@ func TestServer(t *testing.T) {
 	}
 
 	for _, topic := range topics1 {
-		if err := engine.CreateTopic(
+		response, e := SubmitNewTopicRequest(address,
 			NewTopic(topic).
 				UsingBroadcast().
-				UsingNoSelection()); err != nil {
-			t.Fatalf("err:%v", err)
+				UsingNoSelection())
+		if e != nil {
+			t.Fatalf("err:%v", e)
 		}
+		slog.Debug("http topic create", "status", response.Status)
 	}
 
 	items := []*testItem{
-		buildTestItem(t, engine, "red", topics0),
-		buildTestItem(t, engine, "blue", topics1),
-		buildTestItem(t, engine, "green", topics0),
-		buildTestItem(t, engine, "orange", topics1),
-		buildTestItem(t, engine, "magenta", topics0),
+		buildTestItem(t, engine, address, "red", topics0),
+		buildTestItem(t, engine, address, "blue", topics1),
+		buildTestItem(t, engine, address, "green", topics0),
+		buildTestItem(t, engine, address, "orange", topics1),
+		buildTestItem(t, engine, address, "magenta", topics0),
 	}
 
 	for _, item := range items {
@@ -80,10 +81,8 @@ func TestServer(t *testing.T) {
 		slog.Debug("item", "id", item.sub.Id)
 	}
 
-	endpointUrl := fmt.Sprintf("http://%s/submit", address)
-
 	for _, topic := range topics0 {
-		resp, err := SubmitEvent(endpointUrl,
+		resp, err := SubmitEvent(address,
 			&Event{
 				Spawned:  time.Now(),
 				Topic:    topic,
@@ -116,7 +115,7 @@ func TestServer(t *testing.T) {
 	}
 }
 
-func buildTestItem(t *testing.T, engine *Engine, id string, topics []string) *testItem {
+func buildTestItem(t *testing.T, engine *Engine, address string, id string, topics []string) *testItem {
 	recvd := make([]*Event, 0)
 	ti := testItem{
 		sub: Subscriber{
@@ -127,14 +126,25 @@ func buildTestItem(t *testing.T, engine *Engine, id string, topics []string) *te
 		topics: topics,
 	}
 
+	// TODO: Need to find a way to hook local callback to a fwd from the server
+	//       for testing. IRL it won't be a problem...
 	engine.Register(ti.sub)
 
+	// TODO: Since we can't do this easily in test without creating an infinite
+	//       event loop, we will have an integration test that checks
+	//       the functionality of remote receivers down the line
+
+	//_, err := SubmitRegistrationRequest(address, address, id)
+	//if err != nil {
+	//  t.Fatalf("err:%v", err)
+	//}
+
 	for _, topic := range topics {
-		if err := engine.SubscribeTo(topic, id); err != nil {
+		_, err := SubmitSubscriptionRequest(address, topic, id)
+		if err != nil {
 			t.Fatalf("err:%v", err)
 		}
 	}
-
 	return &ti
 }
 
