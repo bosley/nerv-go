@@ -1,5 +1,4 @@
 
-Finish up HTTP stuff
 
 Create CLI :
 
