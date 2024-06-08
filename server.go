@@ -13,10 +13,12 @@ import (
 )
 
 const (
+	endpointPing      = "/ping"
 	endpointSubmit    = "/submit"
 	endpointRegister  = "/register"
 	endpointNewTopic  = "/new_topic"
 	endpointSubscribe = "/subscribe"
+  endpointPingResp  = "Кто там?"
 )
 
 var ErrServerAlreadyRunning = errors.New("server already running")
@@ -55,26 +57,12 @@ func (nrvs *NervServer) Start() error {
 		return ErrServerAlreadyRunning
 	}
 
-	// TODO: We should "wrap" the endpoints conditionally with
-	//       an auth message later to ensure that registrations/subs/topics
-	//       can be "world facing" and not a risk.
-	/*
-
-		      if nrvs.requireAuth {
-
-			      http.HandleFunc(
-		          endpointSubscribe, nrvs.handleAuthBefore(nrvs.handleSubscribe))
-
-		          \---- Then when req comes in handleAuthBefore will auth,
-		                then, conditionally go to handle subscribe
-		      }
-
-	*/
-
+  // TODO: Wrap with function builder for optional AUTH
 	http.HandleFunc(endpointSubmit, nrvs.handleSubmission())
 	http.HandleFunc(endpointRegister, nrvs.handleRegistration())
 	http.HandleFunc(endpointNewTopic, nrvs.handleNewTopic())
 	http.HandleFunc(endpointSubscribe, nrvs.handleSubscribe())
+	http.HandleFunc(endpointPing, nrvs.handlePing())
 
 	nrvs.wg = new(sync.WaitGroup)
 	nrvs.wg.Add(1)
@@ -111,6 +99,16 @@ func (nrvs *NervServer) Stop() error {
 	nrvs.wg.Wait()
 	nrvs.wg = nil
 	return nil
+}
+
+func (nrvs *NervServer) handlePing() func(http.ResponseWriter, *http.Request) {
+	return func(writer http.ResponseWriter, req *http.Request) {
+
+    slog.Debug("ping")
+
+    writer.WriteHeader(200)
+		writer.Write([]byte(endpointPingResp))
+  }
 }
 
 func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Request) {
