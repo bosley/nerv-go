@@ -174,12 +174,12 @@ func (nrvs *NervServer) handleRegistration() func(http.ResponseWriter, *http.Req
 		body, err := ioutil.ReadAll(req.Body)
 
 		if err != nil {
-			slog.Error("nerv:server:handleSubmission", "err", err.Error())
+			slog.Error("nerv:server:handleRegistration", "err", err.Error())
 			writer.WriteHeader(400)
 			return
 		}
 
-		slog.Debug("nerv:server:handleSubmission", "body", string(body))
+		slog.Debug("nerv:server:handleRegistration", "body", string(body))
 
 		var reqWrapper RequestSubscriberRegistration
 
@@ -199,8 +199,32 @@ func (nrvs *NervServer) handleRegistration() func(http.ResponseWriter, *http.Req
 
 func (nrvs *NervServer) handleNewTopic() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
-		writer.WriteHeader(418)
-		writer.Write([]byte("i'm a teapot"))
+
+		body, err := ioutil.ReadAll(req.Body)
+
+		if err != nil {
+			slog.Error("nerv:server:handleNewTopic", "err", err.Error())
+			writer.WriteHeader(400)
+			return
+		}
+
+		slog.Debug("nerv:server:handleNewTopic", "body", string(body))
+
+		var reqWrapper RequestNewTopic
+
+		if err := json.Unmarshal(body, &reqWrapper); err != nil {
+			writer.WriteHeader(400)
+			return
+		}
+
+		err = nrvs.engine.CreateTopic(&reqWrapper.Config)
+		if err != nil {
+			writer.WriteHeader(409)
+			if errors.Is(err, ErrEngineDuplicateTopic) {
+				writer.Write([]byte("duplicate topic"))
+			}
+			return
+		}
 	}
 }
 

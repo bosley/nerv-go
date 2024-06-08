@@ -83,7 +83,29 @@ func TestBroadcast(t *testing.T) {
 		"/user/bldg-a/floor-2/humidity",
 	}
 
-	engine := NewEngine()
+	cbMu := new(sync.Mutex)
+	cbs := make(map[string]bool)
+	cbNames := make([]string, 0)
+
+	createCb := func(id string) EventRecvr {
+		cbs[id] = false
+		cbNames = append(cbNames, id)
+		return func(event *Event) {
+			cbMu.Lock()
+			defer cbMu.Unlock()
+			slog.Warn("engine callback", "to", id)
+			cbs[id] = true
+		}
+	}
+
+	engine := NewEngine().
+		WithCallbacks(
+			EngineCallbacks{
+				RegisterCb:  createCb("registration"),
+				NewTopicCb:  createCb("new_topic"),
+				SubscribeCb: createCb("subscription"),
+				SubmitCb:    createCb("submission"),
+			})
 
 	for i, top := range topics {
 		if err := engine.CreateTopic(
@@ -128,6 +150,21 @@ func TestBroadcast(t *testing.T) {
 	}
 
 	fmt.Println("[SENDS COMPLETE]")
+	fmt.Println("checking engine callbacks")
+
+	time.Sleep(1 * time.Second)
+
+	for _, cb := range cbNames {
+		val, ok := cbs[cb]
+		if !ok {
+			t.Fatalf("Failed to get cb")
+		}
+		if val != true {
+			t.Fatalf("Engine failed to fire a registered cb")
+		}
+	}
+
+	fmt.Println("[CHECKS COMPLETE]")
 	fmt.Println("stopping engine")
 
 	if err := engine.Stop(); err != nil {
@@ -166,6 +203,7 @@ func TestBroadcast(t *testing.T) {
 
 	fmt.Println("[CHECK COMPLETE]")
 	fmt.Println(len(events), "events over", len(topics), "topics processed")
+
 	fmt.Println("[TEST COMPLETE]")
 }
 

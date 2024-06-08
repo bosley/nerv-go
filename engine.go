@@ -3,6 +3,7 @@ package nerv
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -30,6 +31,15 @@ type Engine struct {
 	server *NervServer
 
 	running bool
+
+	callbacks EngineCallbacks
+}
+
+type EngineCallbacks struct {
+	RegisterCb  EventRecvr
+	NewTopicCb  EventRecvr
+	SubscribeCb EventRecvr
+	SubmitCb    EventRecvr
 }
 
 func NewEngine() *Engine {
@@ -39,9 +49,25 @@ func NewEngine() *Engine {
 		eventChan:   make(chan Event),
 		server:      nil,
 		running:     false,
+		callbacks: EngineCallbacks{
+			nil,
+			nil,
+			nil,
+			nil,
+		},
 	}
 
 	eng.ctx, eng.cancel = context.WithCancel(context.Background())
+
+	eng.CreateTopic(
+		NewTopic("nerv.internal").
+			UsingBroadcast().
+			UsingNoSelection())
+	return eng
+}
+
+func (eng *Engine) WithCallbacks(cbs EngineCallbacks) *Engine {
+	eng.callbacks = cbs
 	return eng
 }
 
@@ -131,28 +157,29 @@ func (eng *Engine) Stop() error {
 	return nil
 }
 
-func (eng *Engine) Submit(id string, topic string, data interface{}) error {
-
-	slog.Debug("Submit", "id", id, "topic", topic)
-	if !eng.running {
-		return ErrEngineNotRunning
+func (eng *Engine) checkCallback(fn EventRecvr, data interface{}) {
+	if fn != nil {
+		fn(&Event{
+			time.Now(),
+			"nerv.internal",
+			"nerv.engine",
+			data,
+		})
 	}
+}
 
-	eng.eventChan <- Event{
+func (eng *Engine) Submit(id string, topic string, data interface{}) error {
+	return eng.SubmitEvent(Event{
 		time.Now(),
 		topic,
 		id,
 		data,
-	}
-
-	slog.Debug("SUBMITTED")
-
-	return nil
+	})
 }
 
 func (eng *Engine) SubmitEvent(event Event) error {
 
-	slog.Debug("SubmitWithTime", "topic", event.Topic, "producer", event.Producer)
+	slog.Debug("SubmitEvent", "topic", event.Topic, "producer", event.Producer)
 	if !eng.running {
 		return ErrEngineNotRunning
 	}
@@ -160,15 +187,20 @@ func (eng *Engine) SubmitEvent(event Event) error {
 	eng.eventChan <- event
 
 	slog.Debug("SUBMITTED")
+
+	go eng.checkCallback(eng.callbacks.SubmitCb, &event)
 	return nil
 }
 
 func (eng *Engine) Register(sub Subscriber) {
 	slog.Debug("Register", "subscriber", sub.Id)
+
 	eng.subMu.Lock()
 	defer eng.subMu.Unlock()
 
 	eng.subscribers[sub.Id] = sub.Fn
+
+	go eng.checkCallback(eng.callbacks.RegisterCb, &sub)
 	return
 }
 
@@ -188,6 +220,8 @@ func (eng *Engine) CreateTopic(cfg *TopicCfg) error {
 		selectionType:    cfg.SelectionType,
 		subscribed:       make([]EventRecvr, 0),
 	}
+
+	go eng.checkCallback(eng.callbacks.NewTopicCb, cfg)
 	return nil
 }
 
@@ -238,6 +272,8 @@ func (eng *Engine) subscribeTo(topicId string, subId string) error {
 
 	eng.topics[topicId] = topic
 
+	info := fmt.Sprintf("%s:%s", topicId, subId)
+	go eng.checkCallback(eng.callbacks.SubscribeCb, &info)
 	return nil
 }
 

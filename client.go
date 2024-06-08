@@ -36,9 +36,9 @@ type SubmissionResponse struct {
 	Body   string
 }
 
-func SubmitNewTopicRequest(address string, topic string) (*SubmissionResponse, error) {
+func SubmitNewTopicRequest(address string, topicCfg TopicCfg) (*SubmissionResponse, error) {
 	out := RequestNewTopic{
-		Topic: topic,
+		Config: topicCfg,
 	}
 	encoded, err := json.Marshal(out)
 	if err != nil {
