@@ -17,6 +17,8 @@ const (
 	selectRandom
 )
 
+var ErrTopicNoSubscriberFound = errors.New("no subscriber found")
+
 type eventTopic struct {
 	distributionType int
 	selectionType    int
@@ -88,7 +90,7 @@ func (t *eventTopic) randomSubscriber() (int, error) {
 	}
 
 	if len(potentials) == 0 {
-		return -1, errors.New("no subscriber found")
+		return -1, ErrTopicNoSubscriberFound
 	}
 
 	return potentials[rand.IntN(len(potentials))], nil
@@ -117,7 +119,7 @@ func (t *eventTopic) rrNext() (int, error) {
 
 		checked += 1
 		if checked > len(t.subscribed) {
-			return -1, errors.New("no subscriber found")
+			return -1, ErrTopicNoSubscriberFound
 		}
 	}
 

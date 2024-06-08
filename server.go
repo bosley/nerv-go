@@ -20,22 +20,27 @@ const (
 	endpointSubscribe = "/subscribe"
 )
 
+var ErrServerAlreadyRunning = errors.New("server already running")
+var ErrServerNotRunning = errors.New("server not running")
+
 type SubmissionResponse struct {
 	Status string
 	Body   string
 }
 
 type NervServer struct {
-	wg     *sync.WaitGroup
-	engine *Engine
-	server *http.Server
+	wg               *sync.WaitGroup
+	engine           *Engine
+	server           *http.Server
+	shutdownDuration time.Duration
 
 	allowUnknownProducers bool
 }
 
 type NervServerCfg struct {
-	Address               string
-	AllowUnknownProducers bool
+	Address                  string
+	AllowUnknownProducers    bool
+	GracefulShutdownDuration time.Duration
 }
 
 func SubmitToEndpoint(address string, event *Event) (*SubmissionResponse, error) {
@@ -81,6 +86,7 @@ func HttpServer(cfg NervServerCfg, engine *Engine) *NervServer {
 		engine:                engine,
 		server:                &http.Server{Addr: cfg.Address},
 		allowUnknownProducers: cfg.AllowUnknownProducers,
+		shutdownDuration:      cfg.GracefulShutdownDuration,
 	}
 }
 
@@ -89,7 +95,7 @@ func (nrvs *NervServer) Start() error {
 	slog.Info("nerv:server:start")
 
 	if nrvs.wg != nil {
-		return errors.New("server already running")
+		return ErrServerAlreadyRunning
 	}
 
 	// TODO: We should "wrap" the endpoints conditionally with
@@ -97,14 +103,14 @@ func (nrvs *NervServer) Start() error {
 	//       can be "world facing" and not a risk.
 	/*
 
-	      if nrvs.requireAuth {
+		      if nrvs.requireAuth {
 
-		      http.HandleFunc(
-	          endpointSubscribe, nrvs.handleAuthBefore(nrvs.handleSubscribe))
+			      http.HandleFunc(
+		          endpointSubscribe, nrvs.handleAuthBefore(nrvs.handleSubscribe))
 
-	          \---- Then when req comes in handleAuthBefore will auth,
-	                then, conditionally go to handle subscribe
-	      }
+		          \---- Then when req comes in handleAuthBefore will auth,
+		                then, conditionally go to handle subscribe
+		      }
 
 	*/
 
@@ -133,12 +139,12 @@ func (nrvs *NervServer) Stop() error {
 	slog.Info("nerv:server:stop")
 
 	if nrvs.wg == nil {
-		return errors.New("server not running")
+		return ErrServerNotRunning
 	}
 
 	shutdownCtx, shutdownRelease := context.WithTimeout(
 		context.Background(),
-		10*time.Second)
+		nrvs.shutdownDuration)
 
 	defer shutdownRelease()
 

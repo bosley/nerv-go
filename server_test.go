@@ -28,8 +28,10 @@ func TestServer(t *testing.T) {
 	engine := NewEngine().
 		WithServer(
 			NervServerCfg{
-				Address:               address,
-				AllowUnknownProducers: true})
+				Address:                  address,
+				AllowUnknownProducers:    true,
+				GracefulShutdownDuration: 2 * time.Second,
+			})
 
 	if err := engine.Start(); err != nil {
 		t.Fatalf("err:%v", err)

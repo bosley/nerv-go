@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+var ErrEngineAlreadyRunning = errors.New("server already running")
+var ErrEngineNotRunning = errors.New("server not running")
+var ErrEngineUnknownTopic = errors.New("unknown topic")
+var ErrEngineUnknownSubscriber = errors.New("unknown subscriber")
+var ErrEngineDuplicateTopic = errors.New("duplicate topic")
+
 type Engine struct {
 	topics      map[string]*eventTopic
 	subscribers map[string]EventRecvr
@@ -74,7 +80,7 @@ func (eng *Engine) Start() error {
 	slog.Debug("Start", "running", eng.running)
 
 	if eng.running {
-		return errors.New("unable to start, engine already running")
+		return ErrEngineAlreadyRunning
 	}
 
 	eng.wg.Add(1)
@@ -113,7 +119,7 @@ func (eng *Engine) Stop() error {
 	slog.Debug("Stop", "running", eng.running)
 
 	if !eng.running {
-		return errors.New("unable to stop, engine not running")
+		return ErrEngineNotRunning
 	}
 
 	close(eng.eventChan)
@@ -129,7 +135,7 @@ func (eng *Engine) Submit(id string, topic string, data interface{}) error {
 
 	slog.Debug("Submit", "id", id, "topic", topic)
 	if !eng.running {
-		return errors.New("unable to submit, engine not running")
+		return ErrEngineNotRunning
 	}
 
 	eng.eventChan <- Event{
@@ -148,7 +154,7 @@ func (eng *Engine) SubmitEvent(event Event) error {
 
 	slog.Debug("SubmitWithTime", "topic", event.Topic, "producer", event.Producer)
 	if !eng.running {
-		return errors.New("unable to submit, engine not running")
+		return ErrEngineNotRunning
 	}
 
 	eng.eventChan <- event
@@ -175,7 +181,7 @@ func (eng *Engine) CreateTopic(cfg *TopicCfg) error {
 
 	_, ok := eng.topics[cfg.Name]
 	if ok {
-		return errors.New("Duplicate topic id")
+		return ErrEngineDuplicateTopic
 	}
 	eng.topics[cfg.Name] = &eventTopic{
 		distributionType: cfg.DistType,
@@ -218,12 +224,12 @@ func (eng *Engine) subscribeTo(topicId string, subId string) error {
 
 	subscribedFn, aok := eng.subscribers[subId]
 	if !aok {
-		return errors.New("Uknown subscriber id")
+		return ErrEngineUnknownSubscriber
 	}
 
 	topic, tok := eng.topics[topicId]
 	if !tok {
-		return errors.New("Unknown topic id")
+		return ErrEngineUnknownTopic
 	}
 
 	slog.Info("Adding subscriber", "id", subId)
