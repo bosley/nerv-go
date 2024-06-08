@@ -1,7 +1,6 @@
 package nerv
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,11 +22,6 @@ const (
 var ErrServerAlreadyRunning = errors.New("server already running")
 var ErrServerNotRunning = errors.New("server not running")
 
-type SubmissionResponse struct {
-	Status string
-	Body   string
-}
-
 type NervServer struct {
 	wg               *sync.WaitGroup
 	engine           *Engine
@@ -41,43 +35,6 @@ type NervServerCfg struct {
 	Address                  string
 	AllowUnknownProducers    bool
 	GracefulShutdownDuration time.Duration
-}
-
-func SubmitToEndpoint(address string, event *Event) (*SubmissionResponse, error) {
-
-	encoded, err := json.Marshal(event)
-
-	if err != nil {
-		return nil, err
-	}
-
-	request, err := http.NewRequest("POST", address, bytes.NewBuffer(encoded))
-
-	if err != nil {
-		return nil, err
-	}
-
-	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
-
-	client := &http.Client{}
-	response, err := client.Do(request)
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer response.Body.Close()
-
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		body = []byte("{}")
-	}
-
-	return &SubmissionResponse{
-			Status: response.Status,
-			Body:   string(body),
-		},
-		nil
 }
 
 func HttpServer(cfg NervServerCfg, engine *Engine) *NervServer {
@@ -177,12 +134,14 @@ func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Reque
 
 		slog.Debug("nerv:server:handleSubmission", "body", string(body))
 
-		var event Event
+		var reqWrapper RequestEventSubmission
 
-		if err := json.Unmarshal(body, &event); err != nil {
+		if err := json.Unmarshal(body, &reqWrapper); err != nil {
 			writer.WriteHeader(400)
 			return
 		}
+
+		event := reqWrapper.EventData
 
 		if !nrvs.engine.ContainsTopic(&event.Topic) {
 			writer.WriteHeader(400)
@@ -211,8 +170,30 @@ func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Reque
 
 func (nrvs *NervServer) handleRegistration() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
-		writer.WriteHeader(418)
-		writer.Write([]byte("i'm a teapot"))
+
+		body, err := ioutil.ReadAll(req.Body)
+
+		if err != nil {
+			slog.Error("nerv:server:handleSubmission", "err", err.Error())
+			writer.WriteHeader(400)
+			return
+		}
+
+		slog.Debug("nerv:server:handleSubmission", "body", string(body))
+
+		var reqWrapper RequestSubscriberRegistration
+
+		if err := json.Unmarshal(body, &reqWrapper); err != nil {
+			writer.WriteHeader(400)
+			return
+		}
+
+		nrvs.engine.Register(
+			setupSubscriptionFwd(
+				reqWrapper.HostAddress,
+				reqWrapper.SubscriberId))
+
+		writer.WriteHeader(200)
 	}
 }
 
@@ -227,5 +208,22 @@ func (nrvs *NervServer) handleSubscribe() func(http.ResponseWriter, *http.Reques
 	return func(writer http.ResponseWriter, req *http.Request) {
 		writer.WriteHeader(418)
 		writer.Write([]byte("i'm a teapot"))
+	}
+}
+
+// Create a subscriber with an anonymous function that utilizes
+// the http client's SubmitEvent to forward any events that
+// the subscriber receives on the local event bus
+func setupSubscriptionFwd(address string, subscriber string) Subscriber {
+	return Subscriber{
+		Id: subscriber,
+		Fn: func(event *Event) {
+
+			// Don't send them back messages that they sent us
+			if event.Producer == subscriber {
+				return
+			}
+			SubmitEvent(address, event)
+		},
 	}
 }

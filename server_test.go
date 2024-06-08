@@ -83,7 +83,7 @@ func TestServer(t *testing.T) {
 	endpointUrl := fmt.Sprintf("http://%s/submit", address)
 
 	for _, topic := range topics0 {
-		resp, err := SubmitToEndpoint(endpointUrl,
+		resp, err := SubmitEvent(endpointUrl,
 			&Event{
 				Spawned:  time.Now(),
 				Topic:    topic,
