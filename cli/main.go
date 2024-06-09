@@ -53,11 +53,12 @@ func main() {
   addrPtr := flag.String("address", defaultAddress, "Address to bind for nerv server [address:port]")
   sdtPtr  := flag.Int("grace", defaultGracefulShutdownTimeSec, "Seconds to wait for shutdown of server; default: 5")
   pupPtr  := flag.Bool("filter", defaultPermitUnknownProducers, "Filter unregistered producers from submitting events")
-  targetPtr := flag.String("out", defaultProcFileName, "File to store runtime information of running server")
+  targetPtr := flag.String("rti", defaultProcFileName, "File to store runtime information of running server")
 
   startPtr := flag.Bool("up", false, "Start server")
-  stopPtr := flag.Bool("down", false, "Stop server")
-  restartPtr := flag.Bool("restart", false, "Restart the server")
+  stopPtr := flag.Bool("down", false, "Stop server (graceful)")
+  cleanPtr := flag.Bool("clean", false, "Kills a server iff its running, and then wipes the rti file")
+  forcePtr := flag.Bool("force", false, "Force kills nerv instance when used with -down")
 
   flag.Parse()
 
@@ -67,34 +68,54 @@ func main() {
     GracefulShutdownDuration: time.Duration(*sdtPtr) * time.Second,
   }
 
-  if *startPtr {
-    doHost(serverCfg, targetPtr)
-    os.Exit(0)
-  }
-
   if *stopPtr {
     if !checkIfRunning(*targetPtr) {
       fmt.Println("no server seems to be running. perhaps you forgot to specift the nerv file?")
-      os.Exit(0)
+    } else {
+      doKillProc(*targetPtr, *forcePtr)
     }
-    doKillProc(*targetPtr)
-    os.Exit(0)
   }
 
-  if *restartPtr {
-    if !checkIfRunning(*targetPtr) {
-      fmt.Println("already stopped..")
-    } else {
-      doKillProc(*targetPtr)
-    }
-    time.Sleep(200 * time.Millisecond)
+  if *cleanPtr {
+    doClean(*targetPtr)
+  }
 
+  if *startPtr {
     doHost(serverCfg, targetPtr)
     os.Exit(0)
   }
 }
 
-func doKillProc(file string) {
+func doClean(file string) {
+
+  slog.Debug("doClean", "file", file)
+
+  pi, err := LoadProcessInfo(file)
+  if err != nil {
+    if errors.Is(err, ErrNoFileAtPath) {
+      slog.Debug("no file to clean :)")
+      return
+    }
+    slog.Error(
+      "Asked to clean file that wasn't able to be validated as a nerv process file")
+    os.Exit(exitCodeErr)
+  }
+
+  slog.Debug("need to clean-up file. checking if listed process is reachable", "pid", pi.PID) 
+
+  // If a crash occurs, or a force kill, the file won't
+  // be cleaned so the class `Running` isn't "good enough"
+  if pi.IsReachable() {
+    slog.Debug("process reachable, issuing kill command")
+    doKillProc(file, true)
+  } else {
+    slog.Debug("process not reachable, cruft detected")
+  }
+  os.Remove(file)
+  slog.Debug("cleaned")
+}
+
+func doKillProc(file string, force bool) {
 
   pi, err := LoadProcessInfo(file)
   if err != nil {
@@ -108,7 +129,12 @@ func doKillProc(file string) {
     os.Exit(exitCodeErr)
   }
 
-  if err := proc.Signal(syscall.Signal(0)); err != nil {
+  sig := syscall.SIGINT
+  if force {
+    sig = syscall.SIGTERM
+  }
+
+  if err := proc.Signal(syscall.Signal(sig)); err != nil {
     slog.Error("failed to signal process", "pid", pi.PID, "err", err.Error())
     os.Exit(exitCodeErr)
   }
