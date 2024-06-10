@@ -2,6 +2,6 @@
 
 cd cli
 
-go build -o nerv main.go && cp nerv ../
+go build -o nerv . && cp nerv ../
 
 cd -
