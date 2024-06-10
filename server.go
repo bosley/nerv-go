@@ -57,7 +57,6 @@ func (nrvs *NervServer) Start() error {
 		return ErrServerAlreadyRunning
 	}
 
-  // TODO: Wrap with function builder for optional AUTH
 	http.HandleFunc(endpointSubmit, nrvs.handleSubmission())
 	http.HandleFunc(endpointRegister, nrvs.handleRegistration())
 	http.HandleFunc(endpointNewTopic, nrvs.handleNewTopic())

@@ -297,5 +297,3 @@ func shutdownServer() {
 		time.Sleep(1 * time.Second)
 	}
 }
-
-
