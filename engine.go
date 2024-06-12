@@ -12,12 +12,12 @@ import (
 var ErrEngineAlreadyRunning = errors.New("server already running")
 var ErrEngineNotRunning = errors.New("server not running")
 var ErrEngineUnknownTopic = errors.New("unknown topic")
-var ErrEngineUnknownSubscriber = errors.New("unknown subscriber")
+var ErrEngineUnknownConsumer = errors.New("unknown consumer")
 var ErrEngineDuplicateTopic = errors.New("duplicate topic")
 
 type Engine struct {
-	topics      map[string]*eventTopic
-	subscribers map[string]EventRecvr
+	topics    map[string]*eventTopic
+	consumers map[string]EventRecvr
 
 	topicMu sync.Mutex
 	subMu   sync.Mutex
@@ -28,7 +28,7 @@ type Engine struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	server *NervServer
+	server *HttpEndpoint
 
 	running bool
 
@@ -36,19 +36,19 @@ type Engine struct {
 }
 
 type EngineCallbacks struct {
-	RegisterCb  EventRecvr
-	NewTopicCb  EventRecvr
-	SubscribeCb EventRecvr
-	SubmitCb    EventRecvr
+	RegisterCb EventRecvr
+	NewTopicCb EventRecvr
+	ConsumeCb  EventRecvr
+	SubmitCb   EventRecvr
 }
 
 func NewEngine() *Engine {
 	eng := &Engine{
-		topics:      make(map[string]*eventTopic),
-		subscribers: make(map[string]EventRecvr),
-		eventChan:   make(chan Event),
-		server:      nil,
-		running:     false,
+		topics:    make(map[string]*eventTopic),
+		consumers: make(map[string]EventRecvr),
+		eventChan: make(chan Event),
+		server:    nil,
+		running:   false,
 		callbacks: EngineCallbacks{
 			nil,
 			nil,
@@ -66,12 +66,23 @@ func NewEngine() *Engine {
 	return eng
 }
 
+func (eng *Engine) WithTopics(topics []*TopicCfg) *Engine {
+	for _, topic := range topics {
+		if err := eng.CreateTopic(topic); err != nil {
+			slog.Debug("failed to create bulk topic", "topic", topic.Name, "err", err.Error())
+			panic("failed to bulk-create topics")
+		}
+		go eng.checkCallback(eng.callbacks.NewTopicCb, topic)
+	}
+	return eng
+}
+
 func (eng *Engine) WithCallbacks(cbs EngineCallbacks) *Engine {
 	eng.callbacks = cbs
 	return eng
 }
 
-func (eng *Engine) WithServer(cfg NervServerCfg) *Engine {
+func (eng *Engine) WithHttpEndpoint(cfg HttpEndpointCfg) *Engine {
 
 	if eng.server != nil {
 		return eng
@@ -95,9 +106,9 @@ func (eng *Engine) ContainsTopic(topic *string) bool {
 	return ok
 }
 
-func (eng *Engine) ContainsSubscriber(id *string) bool {
+func (eng *Engine) ContainsConsumer(id *string) bool {
 	// no guard, just read. no-exist topics filtered on emit
-	_, ok := eng.subscribers[*id]
+	_, ok := eng.consumers[*id]
 	return ok
 }
 
@@ -192,13 +203,13 @@ func (eng *Engine) SubmitEvent(event Event) error {
 	return nil
 }
 
-func (eng *Engine) Register(sub Subscriber) {
-	slog.Debug("Register", "subscriber", sub.Id)
+func (eng *Engine) Register(sub Consumer) {
+	slog.Debug("Register", "consumer", sub.Id)
 
 	eng.subMu.Lock()
 	defer eng.subMu.Unlock()
 
-	eng.subscribers[sub.Id] = sub.Fn
+	eng.consumers[sub.Id] = sub.Fn
 
 	go eng.checkCallback(eng.callbacks.RegisterCb, &sub)
 	return
@@ -236,11 +247,11 @@ func (eng *Engine) DeleteTopic(topicId string) {
 }
 
 // Does not check for duplicate subscriptions
-func (eng *Engine) SubscribeTo(topicId string, subscribers ...string) error {
+func (eng *Engine) SubscribeTo(topicId string, consumers ...string) error {
 
 	slog.Debug("SubscribeTo", "topic", topicId)
 
-	for _, s := range subscribers {
+	for _, s := range consumers {
 		if err := eng.subscribeTo(topicId, s); err != nil {
 			return err
 		}
@@ -256,9 +267,9 @@ func (eng *Engine) subscribeTo(topicId string, subId string) error {
 	eng.topicMu.Lock()
 	defer eng.topicMu.Unlock()
 
-	subscribedFn, aok := eng.subscribers[subId]
+	subscribedFn, aok := eng.consumers[subId]
 	if !aok {
-		return ErrEngineUnknownSubscriber
+		return ErrEngineUnknownConsumer
 	}
 
 	topic, tok := eng.topics[topicId]
@@ -266,14 +277,14 @@ func (eng *Engine) subscribeTo(topicId string, subId string) error {
 		return ErrEngineUnknownTopic
 	}
 
-	slog.Info("Adding subscriber", "id", subId)
+	slog.Info("Adding consumer", "id", subId)
 
 	topic.subscribed = append(topic.subscribed, subscribedFn)
 
 	eng.topics[topicId] = topic
 
 	info := fmt.Sprintf("%s:%s", topicId, subId)
-	go eng.checkCallback(eng.callbacks.SubscribeCb, &info)
+	go eng.checkCallback(eng.callbacks.ConsumeCb, &info)
 	return nil
 }
 
@@ -294,7 +305,7 @@ func (eng *Engine) emitEvent(event *Event) {
 	}
 
 	if !topic.hasSubscriber() {
-		slog.Debug("no subscribers for event topic", "topic", event.Topic, "origin", event.Producer)
+		slog.Debug("no consumers for event topic", "topic", event.Topic, "origin", event.Producer)
 		return
 	}
 
@@ -314,26 +325,26 @@ func publishBroadcast(event *Event, topic *eventTopic) {
 	slog.Debug("broadcast")
 
 	var wg sync.WaitGroup
-	for _, subscriber := range topic.subscribed {
-		if subscriber == nil {
+	for _, consumer := range topic.subscribed {
+		if consumer == nil {
 			continue
 		}
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			subscriber(event)
+			consumer(event)
 		}()
 	}
 	wg.Wait()
 }
 
-func validateId(idx int, subscribers []EventRecvr) bool {
-	if idx < 0 || idx >= len(subscribers) {
+func validateId(idx int, consumers []EventRecvr) bool {
+	if idx < 0 || idx >= len(consumers) {
 		slog.Warn("invalid idx", "idx", idx)
 		return false
 	}
-	if subscribers[idx] == nil {
+	if consumers[idx] == nil {
 		slog.Warn("nil idx for selection")
 		return false
 	}
@@ -350,7 +361,7 @@ func publishDirect(event *Event, topic *eventTopic) {
 				s(event)
 				return
 			} else {
-				slog.Warn("unable to find valid subscriber for arbitrary selection")
+				slog.Warn("unable to find valid consumer for arbitrary selection")
 				return
 			}
 		}

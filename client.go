@@ -5,35 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log/slog"
 	"net/http"
-  "log/slog"
 )
 
 const (
 	protocolString = "http://"
 )
 
-type RemoteSubmitter struct {
-	Address string
-}
-
 type RequestEventSubmission struct {
 	// Auth ,,,
 	EventData Event
-}
-
-type RequestSubscriberRegistration struct {
-	HostAddress  string
-	SubscriberId string
-}
-
-type RequestSubscription struct {
-	Topic        string
-	SubscriberId string
-}
-
-type RequestNewTopic struct {
-	Config TopicCfg
 }
 
 type SubmissionResponse struct {
@@ -42,8 +24,8 @@ type SubmissionResponse struct {
 }
 
 type PingResponse struct {
-  TotalPings  int
-  TotalFails  int
+	TotalPings int
+	TotalFails int
 }
 
 func fmtEndpoint(address string, endpoint string) string {
@@ -51,61 +33,26 @@ func fmtEndpoint(address string, endpoint string) string {
 }
 
 func SubmitPing(address string, count int, max_failures int) PingResponse {
-  pr := PingResponse{
-    TotalPings: 0,
-    TotalFails: 0,
-  }
-  for x:=0; x < count; x++ {
-    slog.Debug("client:SubmitPing", "address", address, "total", count, "current", x)
-    resp, err := send(fmtEndpoint(address, endpointPing), []byte{})
-    pr.TotalPings += 1
-    if err == nil && resp != nil && resp.Status == "200 OK"{
-      slog.Debug("ping success")
-    } else {
-      slog.Debug("ping failure")
-      pr.TotalFails += 1
-      if max_failures != -1 && max_failures <= pr.TotalFails {
-        slog.Debug("reached fail limit", "max", max_failures)
-        return pr
-      }
-    }
-  }
-  return pr
-}
-
-func SubmitNewTopicRequest(address string, topicCfg *TopicCfg) (*SubmissionResponse, error) {
-	out := RequestNewTopic{
-		Config: *topicCfg,
+	pr := PingResponse{
+		TotalPings: 0,
+		TotalFails: 0,
 	}
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return nil, err
+	for x := 0; x < count; x++ {
+		slog.Debug("client:SubmitPing", "address", address, "total", count, "current", x)
+		resp, err := send(fmtEndpoint(address, endpointPing), []byte{})
+		pr.TotalPings += 1
+		if err == nil && resp != nil && resp.Status == "200 OK" {
+			slog.Debug("ping success")
+		} else {
+			slog.Debug("ping failure")
+			pr.TotalFails += 1
+			if max_failures != -1 && max_failures <= pr.TotalFails {
+				slog.Debug("reached fail limit", "max", max_failures)
+				return pr
+			}
+		}
 	}
-	return send(fmtEndpoint(address, endpointNewTopic), encoded)
-}
-
-func SubmitRegistrationRequest(remoteAddress string, localAddress string, receiverId string) (*SubmissionResponse, error) {
-	out := RequestSubscriberRegistration{
-		HostAddress:  localAddress,
-		SubscriberId: receiverId,
-	}
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return nil, err
-	}
-	return send(fmtEndpoint(remoteAddress, endpointRegister), encoded)
-}
-
-func SubmitSubscriptionRequest(address string, topic string, subscriberId string) (*SubmissionResponse, error) {
-	out := RequestSubscription{
-		Topic:        topic,
-		SubscriberId: subscriberId,
-	}
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return nil, err
-	}
-	return send(fmtEndpoint(address, endpointSubscribe), encoded)
+	return pr
 }
 
 func SubmitEvent(address string, event *Event) (*SubmissionResponse, error) {

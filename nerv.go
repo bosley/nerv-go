@@ -13,7 +13,7 @@ type Event struct {
 
 type EventRecvr func(event *Event)
 
-type Subscriber struct {
+type Consumer struct {
 	Id string
 	Fn EventRecvr
 }

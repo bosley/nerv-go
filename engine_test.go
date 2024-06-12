@@ -65,6 +65,12 @@ func recvdBroadcastNx(actual *testActor, event eventActivity) int {
 	return numOccur
 }
 
+func makeTopic(name string) *TopicCfg {
+	return NewTopic(name).
+		UsingBroadcast().
+		UsingNoSelection()
+}
+
 func TestBroadcast(t *testing.T) {
 
 	slog.SetDefault(
@@ -74,13 +80,13 @@ func TestBroadcast(t *testing.T) {
 					Level: slog.LevelWarn,
 				})))
 	actors, actor_ids := generateActors(25)
-	topics := []string{
-		"/user/bldg-a/floor-0/temp",
-		"/user/bldg-a/floor-0/humitity",
-		"/user/bldg-a/floor-1/temp",
-		"/user/bldg-a/floor-1/humidity",
-		"/user/bldg-a/floor-2/temp",
-		"/user/bldg-a/floor-2/humidity",
+	topics := []*TopicCfg{
+		makeTopic("/user/bldg-a/floor-0/temp"),
+		makeTopic("/user/bldg-a/floor-0/humitity"),
+		makeTopic("/user/bldg-a/floor-1/temp"),
+		makeTopic("/user/bldg-a/floor-1/humidity"),
+		makeTopic("/user/bldg-a/floor-2/temp"),
+		makeTopic("/user/bldg-a/floor-2/humidity"),
 	}
 
 	cbMu := new(sync.Mutex)
@@ -101,28 +107,21 @@ func TestBroadcast(t *testing.T) {
 	engine := NewEngine().
 		WithCallbacks(
 			EngineCallbacks{
-				RegisterCb:  createCb("registration"),
-				NewTopicCb:  createCb("new_topic"),
-				SubscribeCb: createCb("subscription"),
-				SubmitCb:    createCb("submission"),
-			})
-
-	for i, top := range topics {
-		if err := engine.CreateTopic(
-			NewTopic(top).
-				UsingBroadcast().
-				UsingNoSelection()); err != nil {
-			t.Fatalf("err:%v", err)
-		}
-		fmt.Println("Generated topic", i, top)
-	}
+				RegisterCb: createCb("registration"),
+				NewTopicCb: createCb("new_topic"),
+				ConsumeCb:  createCb("consumed"),
+				SubmitCb:   createCb("submission"),
+			}).
+		// We MUST place _after_ WithCallbacks for test as
+		// we expect registration callbacks for topics
+		WithTopics(topics)
 
 	for _, a := range actors {
-		engine.Register(Subscriber{a.Id(), a.Accept})
+		engine.Register(Consumer{a.Id(), a.Accept})
 	}
 
 	for _, top := range topics {
-		if err := engine.SubscribeTo(top, actor_ids...); err != nil {
+		if err := engine.SubscribeTo(top.Name, actor_ids...); err != nil {
 			t.Fatalf("err:%v", err)
 		}
 	}
@@ -139,12 +138,12 @@ func TestBroadcast(t *testing.T) {
 		for i := 0; i < numSends; i++ {
 			for _, sub := range actor_ids {
 				event := eventActivity{
-					topic,
+					topic.Name,
 					sub,
 					i,
 				}
 				events = append(events, event)
-				engine.Submit(sub, topic, event.data)
+				engine.Submit(sub, topic.Name, event.data)
 			}
 		}
 	}
@@ -232,7 +231,7 @@ func TestDirectRoundRobin(t *testing.T) {
 		id:    0,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorA.Id(), actorA.Accept})
+	engine.Register(Consumer{actorA.Id(), actorA.Accept})
 
 	actorASubmitter := NewSubmissionHandler(engine, actorA.Id())
 
@@ -241,21 +240,21 @@ func TestDirectRoundRobin(t *testing.T) {
 		id:    1,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorB.Id(), actorB.Accept})
+	engine.Register(Consumer{actorB.Id(), actorB.Accept})
 
 	actorC := testActor{
 		name:  "C",
 		id:    2,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorC.Id(), actorC.Accept})
+	engine.Register(Consumer{actorC.Id(), actorC.Accept})
 
 	actorD := testActor{
 		name:  "D",
 		id:    3,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorD.Id(), actorD.Accept})
+	engine.Register(Consumer{actorD.Id(), actorD.Accept})
 
 	aids := []string{
 		"B", "C", "D",
@@ -382,28 +381,28 @@ func TestDirectRandom(t *testing.T) {
 		id:    0,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorA.Id(), actorA.Accept})
+	engine.Register(Consumer{actorA.Id(), actorA.Accept})
 
 	actorB := testActor{
 		name:  "B",
 		id:    1,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorB.Id(), actorB.Accept})
+	engine.Register(Consumer{actorB.Id(), actorB.Accept})
 
 	actorC := testActor{
 		name:  "C",
 		id:    2,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorC.Id(), actorC.Accept})
+	engine.Register(Consumer{actorC.Id(), actorC.Accept})
 
 	actorD := testActor{
 		name:  "D",
 		id:    3,
 		recvd: make([]eventActivity, 0),
 	}
-	engine.Register(Subscriber{actorD.Id(), actorD.Accept})
+	engine.Register(Consumer{actorD.Id(), actorD.Accept})
 
 	actorIds := []string{
 		actorB.Id(),
