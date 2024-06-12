@@ -19,7 +19,7 @@ that forwards `net.conn` objects to the consumers of that module in a round-robi
 may not make sense, its used strictly for testing.
 
 The second is `modhttp`, a module meant specifically to open the event bus to the world (or local network, etc) via http.
-This module contains client and server functions along with an optional "authorization wrapperr + callback" scheme that
+This module contains client and server functions along with an optional "authorization wrapper + callback" scheme that
 can allow a user to filter out any submissions that have invalid or nonexistent API tokens, etc. See `modhttp_test.go` in
 the `modhttp` directory.
 
