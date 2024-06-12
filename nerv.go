@@ -27,8 +27,8 @@ type Consumer struct {
 // Interface used in nerv engine to manage modules
 // loaded in by the user
 type Module interface {
-	IndStart() error
-	IndShutdown()
+	Start() error
+	Shutdown()
 	SetSubmitter(fn *ModuleSubmitter)
 }
 

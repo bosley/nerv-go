@@ -26,7 +26,7 @@ func newTcpModule(address string) Module {
 	}
 }
 
-func (m *tcpModule) IndStart() error {
+func (m *tcpModule) Start() error {
 	var err error
 	m.server, err = newTcpServer(m.address, m.submitter)
 	if err != nil {
@@ -42,7 +42,7 @@ func (m *tcpModule) SetSubmitter(s *ModuleSubmitter) {
 	m.submitter = s
 }
 
-func (m *tcpModule) IndShutdown() {
+func (m *tcpModule) Shutdown() {
 	m.server.stop()
 }
 

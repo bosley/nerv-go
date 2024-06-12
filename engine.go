@@ -132,7 +132,7 @@ func (eng *Engine) Start() error {
 
 	for name, mod := range eng.modules {
 		slog.Debug("indicating start to module", "module", name)
-		mod.IndStart()
+		mod.Start()
 	}
 
 	return nil
@@ -148,7 +148,7 @@ func (eng *Engine) Stop() error {
 
 	for name, mod := range eng.modules {
 		slog.Debug("indicating shutdown to module", "module", name)
-		mod.IndShutdown()
+		mod.Shutdown()
 	}
 
 	close(eng.eventChan)

@@ -81,7 +81,7 @@ func (ep *Endpoint) SetSubmitter(s *nerv.ModuleSubmitter) {
 	ep.submitter = s
 }
 
-func (ep *Endpoint) IndStart() error {
+func (ep *Endpoint) Start() error {
 
 	slog.Info("modhttp:server:start")
 
@@ -106,7 +106,7 @@ func (ep *Endpoint) IndStart() error {
 	return nil
 }
 
-func (ep *Endpoint) IndShutdown() {
+func (ep *Endpoint) Shutdown() {
 
 	slog.Info("modhttp:server:shutdown")
 
