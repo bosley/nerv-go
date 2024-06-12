@@ -16,8 +16,8 @@ var ErrEngineUnknownConsumer = errors.New("unknown consumer")
 var ErrEngineDuplicateTopic = errors.New("duplicate topic")
 
 type Engine struct {
-  topics    map[string]*eventTopic
-  consumers map[string]EventRecvr
+	topics    map[string]*eventTopic
+	consumers map[string]EventRecvr
 
 	topicMu sync.Mutex
 	subMu   sync.Mutex
@@ -36,19 +36,19 @@ type Engine struct {
 }
 
 type EngineCallbacks struct {
-	RegisterCb  EventRecvr
-	NewTopicCb  EventRecvr
-	ConsumeCb EventRecvr
-	SubmitCb    EventRecvr
+	RegisterCb EventRecvr
+	NewTopicCb EventRecvr
+	ConsumeCb  EventRecvr
+	SubmitCb   EventRecvr
 }
 
 func NewEngine() *Engine {
 	eng := &Engine{
-		topics:      make(map[string]*eventTopic),
-		consumers:   make(map[string]EventRecvr),
-		eventChan:   make(chan Event),
-		server:      nil,
-		running:     false,
+		topics:    make(map[string]*eventTopic),
+		consumers: make(map[string]EventRecvr),
+		eventChan: make(chan Event),
+		server:    nil,
+		running:   false,
 		callbacks: EngineCallbacks{
 			nil,
 			nil,
@@ -67,14 +67,14 @@ func NewEngine() *Engine {
 }
 
 func (eng *Engine) WithTopics(topics []*TopicCfg) *Engine {
-  for _, topic := range topics {
-    if err := eng.CreateTopic(topic); err != nil {
-      slog.Debug("failed to create bulk topic", "topic", topic.Name, "err", err.Error())
-      panic("failed to bulk-create topics")
-    }
-    go eng.checkCallback(eng.callbacks.NewTopicCb, topic)
-  }
-  return eng
+	for _, topic := range topics {
+		if err := eng.CreateTopic(topic); err != nil {
+			slog.Debug("failed to create bulk topic", "topic", topic.Name, "err", err.Error())
+			panic("failed to bulk-create topics")
+		}
+		go eng.checkCallback(eng.callbacks.NewTopicCb, topic)
+	}
+	return eng
 }
 
 func (eng *Engine) WithCallbacks(cbs EngineCallbacks) *Engine {

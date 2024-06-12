@@ -66,9 +66,9 @@ func recvdBroadcastNx(actual *testActor, event eventActivity) int {
 }
 
 func makeTopic(name string) *TopicCfg {
-  return NewTopic(name).
-				  UsingBroadcast().
-				  UsingNoSelection()
+	return NewTopic(name).
+		UsingBroadcast().
+		UsingNoSelection()
 }
 
 func TestBroadcast(t *testing.T) {
@@ -107,14 +107,14 @@ func TestBroadcast(t *testing.T) {
 	engine := NewEngine().
 		WithCallbacks(
 			EngineCallbacks{
-				RegisterCb:  createCb("registration"),
-				NewTopicCb:  createCb("new_topic"),
-				ConsumeCb:   createCb("consumed"),
-				SubmitCb:    createCb("submission"),
+				RegisterCb: createCb("registration"),
+				NewTopicCb: createCb("new_topic"),
+				ConsumeCb:  createCb("consumed"),
+				SubmitCb:   createCb("submission"),
 			}).
-    // We MUST place _after_ WithCallbacks for test as
-    // we expect registration callbacks for topics
-    WithTopics(topics)
+		// We MUST place _after_ WithCallbacks for test as
+		// we expect registration callbacks for topics
+		WithTopics(topics)
 
 	for _, a := range actors {
 		engine.Register(Consumer{a.Id(), a.Accept})

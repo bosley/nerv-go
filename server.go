@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	endpointPing      = "/ping"
-	endpointSubmit    = "/submit"
-  endpointPingResp  = "Кто там?"
+	endpointPing     = "/ping"
+	endpointSubmit   = "/submit"
+	endpointPingResp = "Кто там?"
 )
 
 var ErrServerAlreadyRunning = errors.New("server already running")
@@ -35,10 +35,10 @@ type NervServerCfg struct {
 
 func HttpServer(cfg NervServerCfg, engine *Engine) *NervServer {
 	return &NervServer{
-		wg:                    nil,
-		engine:                engine,
-		server:                &http.Server{Addr: cfg.Address},
-		shutdownDuration:      cfg.GracefulShutdownDuration,
+		wg:               nil,
+		engine:           engine,
+		server:           &http.Server{Addr: cfg.Address},
+		shutdownDuration: cfg.GracefulShutdownDuration,
 	}
 }
 
@@ -93,11 +93,11 @@ func (nrvs *NervServer) Stop() error {
 func (nrvs *NervServer) handlePing() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
 
-    slog.Debug("ping")
+		slog.Debug("ping")
 
-    writer.WriteHeader(200)
+		writer.WriteHeader(200)
 		writer.Write([]byte(endpointPingResp))
-  }
+	}
 }
 
 func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Request) {
@@ -138,4 +138,3 @@ func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Reque
 		return
 	}
 }
-

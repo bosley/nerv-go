@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log/slog"
 	"net/http"
-  "log/slog"
 )
 
 const (
@@ -24,8 +24,8 @@ type SubmissionResponse struct {
 }
 
 type PingResponse struct {
-  TotalPings  int
-  TotalFails  int
+	TotalPings int
+	TotalFails int
 }
 
 func fmtEndpoint(address string, endpoint string) string {
@@ -33,26 +33,26 @@ func fmtEndpoint(address string, endpoint string) string {
 }
 
 func SubmitPing(address string, count int, max_failures int) PingResponse {
-  pr := PingResponse{
-    TotalPings: 0,
-    TotalFails: 0,
-  }
-  for x:=0; x < count; x++ {
-    slog.Debug("client:SubmitPing", "address", address, "total", count, "current", x)
-    resp, err := send(fmtEndpoint(address, endpointPing), []byte{})
-    pr.TotalPings += 1
-    if err == nil && resp != nil && resp.Status == "200 OK"{
-      slog.Debug("ping success")
-    } else {
-      slog.Debug("ping failure")
-      pr.TotalFails += 1
-      if max_failures != -1 && max_failures <= pr.TotalFails {
-        slog.Debug("reached fail limit", "max", max_failures)
-        return pr
-      }
-    }
-  }
-  return pr
+	pr := PingResponse{
+		TotalPings: 0,
+		TotalFails: 0,
+	}
+	for x := 0; x < count; x++ {
+		slog.Debug("client:SubmitPing", "address", address, "total", count, "current", x)
+		resp, err := send(fmtEndpoint(address, endpointPing), []byte{})
+		pr.TotalPings += 1
+		if err == nil && resp != nil && resp.Status == "200 OK" {
+			slog.Debug("ping success")
+		} else {
+			slog.Debug("ping failure")
+			pr.TotalFails += 1
+			if max_failures != -1 && max_failures <= pr.TotalFails {
+				slog.Debug("reached fail limit", "max", max_failures)
+				return pr
+			}
+		}
+	}
+	return pr
 }
 
 func SubmitEvent(address string, event *Event) (*SubmissionResponse, error) {

@@ -91,7 +91,7 @@ func TestServer(t *testing.T) {
 			t.Fatalf("err:%v", err)
 		}
 		slog.Debug("response", "status", resp.Status, "body", resp.Body)
-    time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	time.Sleep(1 * time.Second)
