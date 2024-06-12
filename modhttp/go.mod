@@ -1,4 +1,4 @@
-module nerv-cli
+module github.com/bosley/nerv-go/modhttp
 
 go 1.22.2
 
