@@ -61,6 +61,7 @@ func main() {
 	forcePtr := flag.Bool("force", false, "Force kills nerv instance when used with -down")
 
 	topicPtr := flag.String("topic", appChannel, "Set topic for event")
+	tokenPtr := flag.String("token", "_UNUSED_", "Set token for http submissions")
 	senderPtr := flag.String("prod", "human.cli", "Set the producer for an event")
 	eventDataPtr := flag.String("data", "[TEST EVENT]", "Set string data for event to send using -emit")
 	eventPtr := flag.Bool("emit", false, "Emit an event with topic/producer given by [-topic -prod]")
@@ -74,15 +75,34 @@ func main() {
 		os.Exit(0)
 	}
 
+	var authCb nerv.HttpAuthCb
+
+	if *tokenPtr != "_UNUSED_" {
+		slog.Debug("setting up auth cb")
+		authCb = func(req *nerv.RequestEventSubmission) bool {
+			slog.Debug("auth request")
+			return req.Auth.(string) == *tokenPtr
+		}
+	} else {
+		slog.Debug("no auth selected")
+		authCb = nil
+	}
+
 	if *eventPtr {
-		sr, err := nerv.SubmitEvent(
-			*addrPtr,
-			&nerv.Event{
-				Spawned:  time.Now(),
-				Topic:    *topicPtr,
-				Producer: *senderPtr,
-				Data:     eventDataPtr,
-			})
+		eventOut := &nerv.Event{
+			Spawned:  time.Now(),
+			Topic:    *topicPtr,
+			Producer: *senderPtr,
+			Data:     eventDataPtr,
+		}
+		var err error
+		var sr *nerv.SubmissionResponse
+		if authCb == nil {
+			sr, err = nerv.SubmitEvent(*addrPtr, eventOut)
+		} else {
+			slog.Warn("submit with auth", "token", *tokenPtr)
+			sr, err = nerv.SubmitEventWithAuth(*addrPtr, eventOut, *tokenPtr)
+		}
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(exitCodeErr)
@@ -94,6 +114,7 @@ func main() {
 	serverCfg := nerv.HttpEndpointCfg{
 		Address:                  *addrPtr,
 		GracefulShutdownDuration: time.Duration(*sdtPtr) * time.Second,
+		AuthCb:                   authCb,
 	}
 
 	if *stopPtr {

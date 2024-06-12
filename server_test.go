@@ -13,6 +13,10 @@ type testItem struct {
 	topics []string
 }
 
+const (
+	testApiToken = "V2h5IGRpZCB5b3UgZGVjb2RlIHRoaXM/IFRoYXRzIHNpbGx5LCB0aGlzIGlzIGp1c3QgYSB0ZXN0IGl0ZW0uLi4uIGRvIHlvdSBnbyBhcm91bmQgZGVjb2RpbmcgcmFuZG9tIHRoaW5ncyBpbiBzdHJhbmdlcnMgY29kZSBvZnRlbj8gd2VpcmRvLi4u"
+)
+
 func TestServer(t *testing.T) {
 
 	slog.SetDefault(
@@ -29,6 +33,10 @@ func TestServer(t *testing.T) {
 			HttpEndpointCfg{
 				Address:                  address,
 				GracefulShutdownDuration: 2 * time.Second,
+				AuthCb: func(req *RequestEventSubmission) bool {
+					slog.Debug("http auth callback", "topic", req.EventData.Topic, "prod", req.EventData.Producer)
+					return req.Auth.(string) == testApiToken
+				},
 			})
 
 	if err := engine.Start(); err != nil {
@@ -79,13 +87,14 @@ func TestServer(t *testing.T) {
 	}
 
 	for _, topic := range topics0 {
-		resp, err := SubmitEvent(address,
+		resp, err := SubmitEventWithAuth(address,
 			&Event{
 				Spawned:  time.Now(),
 				Topic:    topic,
 				Producer: "test-prod",
 				Data:     []byte{0xff, 0xfe, 0xfd},
 			},
+			testApiToken,
 		)
 		if err != nil {
 			t.Fatalf("err:%v", err)
