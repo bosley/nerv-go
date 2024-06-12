@@ -31,6 +31,16 @@ run a nerv instance, submit events, and generally just use it to see what `nerv`
 
 Since the example is really the bread and butter of nerv's use-case it is further elaborated on below.
 
+### Building
+
+Since nerv doesn't use anything other than vanilla go all we have to do to 
+build the example all you need to do is go into the `example` directory and run `go build .`
+For the sake of following along with the below commands however, I recommend that the following is run in the `example` directory:
+
+```
+    go build -o nerv .
+```
+
 ### Starting/ Stopping server instance
 
 Start server at 9092 with specified grace shudown time and server process file.
