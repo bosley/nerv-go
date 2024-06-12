@@ -33,7 +33,7 @@ type HttpEndpoint struct {
 // with allows users to encode their preferred auth info.
 // This cb sends that back to the user to perform auth,
 // then a simple T/F return dictates if the request is ok
-type HttpAuthCb func(authData interface{}) bool
+type HttpAuthCb func(request *RequestEventSubmission) bool
 
 type HttpEndpointCfg struct {
 	Address                  string
@@ -137,7 +137,7 @@ func (ep *HttpEndpoint) handleSubmission() func(http.ResponseWriter, *http.Reque
 				slog.Warn("event submission rejection - missing auth", "topic", event.Topic, "producer", event.Producer)
 				writer.WriteHeader(401)
 			}
-			if !ep.authCb(auth) {
+			if !ep.authCb(&reqWrapper) {
 				slog.Warn("event submission auth failure", "topic", event.Topic, "producer", event.Producer)
 				writer.WriteHeader(401)
 			}

@@ -33,8 +33,9 @@ func TestServer(t *testing.T) {
 			HttpEndpointCfg{
 				Address:                  address,
 				GracefulShutdownDuration: 2 * time.Second,
-				AuthCb: func(authData interface{}) bool {
-					return authData.(string) == testApiToken
+				AuthCb: func(req *RequestEventSubmission) bool {
+					slog.Debug("http auth callback", "topic", req.EventData.Topic, "prod", req.EventData.Producer)
+					return req.Auth.(string) == testApiToken
 				},
 			})
 
