@@ -12,10 +12,17 @@ type Event struct {
 }
 
 type EventRecvr func(event *Event)
+type DataRecvr func(data interface{})
 
 type Consumer struct {
 	Id string
 	Fn EventRecvr
+}
+
+type Module interface {
+  IndStart() error
+  IndShutdown()
+  SetSubmitterFn(fn DataRecvr)
 }
 
 type SubmissionHandler interface {
