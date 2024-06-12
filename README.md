@@ -1,6 +1,6 @@
 # nerv-go
 
-### Nerv
+## Nerv
 
 Nerv is a simple pub/sub eventing engine for applications that
 want to to process events in parallel. 
@@ -12,7 +12,7 @@ This project is meant to be used as a library to extend applications but it does
 found in `/cli` that can be used as an example of how to use nerv, as-well-as being used for
 testing nerv-based application
 
-### Starting/ Stopping server instance
+## Starting/ Stopping server instance
 
 Start server at 9092 with specified grace shudown time and server process file.
 ```
@@ -34,9 +34,23 @@ Same things as above, but with defaults:
     ./nerv -down -force -clean -up
 ```
 
-### Posting Event
+## Posting Event
 
 ```
 ./nerv -emit -topic "some.topic" -prod "my.producer.id" -data "some fancy string data"
 ```
 
+### Optional HTTP request Auth
+
+Handing the http server a function to use and callback-on when a submission request comes in
+will enable authentication. Any submission that comes in must include the `Auth` member of
+`RequestEventSubmission` found in `client.go`. The server and client do not care what form
+this authentication is, it simply forwards the data back to the user to see if its valid.
+
+Using api token with CLI:
+
+```
+    ./nerv -emit -token "my-special-api-token" -topic "test" -prod "bosley" -data "hello, world!"
+```
+
+For examples of usage you can see `main.go` in cli/, or see `server_test.go`.
