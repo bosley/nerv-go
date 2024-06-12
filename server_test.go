@@ -25,8 +25,8 @@ func TestServer(t *testing.T) {
 	address := "127.0.0.1:8098"
 
 	engine := NewEngine().
-		WithServer(
-			NervServerCfg{
+		WithHttpEndpoint(
+			HttpEndpointCfg{
 				Address:                  address,
 				GracefulShutdownDuration: 2 * time.Second,
 			})

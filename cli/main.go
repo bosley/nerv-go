@@ -52,19 +52,48 @@ func main() {
 
 	addrPtr := flag.String("address", defaultAddress, "Address to bind for nerv server [address:port]")
 	sdtPtr := flag.Int("grace", defaultGracefulShutdownTimeSec, "Seconds to wait for shutdown of server; default: 5")
-	pupPtr := flag.Bool("filter", defaultPermitUnknownProducers, "Filter unregistered producers from submitting events")
 	targetPtr := flag.String("rti", defaultProcFileName, "File to store runtime information of running server")
 
+	pingPtr := flag.Bool("ping", false, "Ping server")
 	startPtr := flag.Bool("up", false, "Start server")
 	stopPtr := flag.Bool("down", false, "Stop server (graceful)")
 	cleanPtr := flag.Bool("clean", false, "Kills a server iff its running, and then wipes the rti file")
 	forcePtr := flag.Bool("force", false, "Force kills nerv instance when used with -down")
 
+  topicPtr := flag.String("topic", appChannel, "Set topic for event")
+  senderPtr := flag.String("prod", "human.cli", "Set the producer for an event")
+  eventDataPtr := flag.String("data", "[TEST EVENT]", "Set string data for event to send using -emit")
+  eventPtr := flag.Bool("emit", false, "Emit an event with topic/producer given by [-topic -prod]")
+
+
 	flag.Parse()
 
-	serverCfg := nerv.NervServerCfg{
+  if *pingPtr {
+    pr := nerv.SubmitPing(*addrPtr, 10, 10)
+    fmt.Println(
+      fmt.Sprintf("Ping finished %d/%d pings failed", pr.TotalFails, pr.TotalPings))
+    os.Exit(0)
+  }
+
+  if *eventPtr {
+    sr, err := nerv.SubmitEvent(
+      *addrPtr,
+      &nerv.Event{
+        Spawned: time.Now(),
+        Topic: *topicPtr,
+        Producer: *senderPtr,
+        Data: eventDataPtr,
+      })
+    if err != nil {
+      fmt.Println(err)
+      os.Exit(exitCodeErr)
+    }
+    fmt.Println(sr.Status)
+    os.Exit(0)
+  }
+
+	serverCfg := nerv.HttpEndpointCfg{
 		Address:                  *addrPtr,
-		AllowUnknownProducers:    *pupPtr,
 		GracefulShutdownDuration: time.Duration(*sdtPtr) * time.Second,
 	}
 
@@ -141,7 +170,7 @@ func doKillProc(file string, force bool) {
 	fmt.Println("success")
 }
 
-func doHost(cfg nerv.NervServerCfg, fileName *string) {
+func doHost(cfg nerv.HttpEndpointCfg, fileName *string) {
 
 	if checkIfRunning(*fileName) {
 		slog.Error("server already running with configuration specified", "cfg file", *fileName)
@@ -167,11 +196,11 @@ func doHost(cfg nerv.NervServerCfg, fileName *string) {
 
 }
 
-func LaunchServer(cfg nerv.NervServerCfg, procInfo *ProcessInfo, wg *sync.WaitGroup) {
+func LaunchServer(cfg nerv.HttpEndpointCfg, procInfo *ProcessInfo, wg *sync.WaitGroup) {
 
 	slog.Debug("LaunchServer", "address", cfg.Address, "pid", procInfo.PID)
 
-	eventEngine = nerv.NewEngine().WithServer(cfg)
+	eventEngine = nerv.NewEngine().WithHttpEndpoint(cfg)
 
 	StartEngine()
 
@@ -198,7 +227,7 @@ func LaunchServer(cfg nerv.NervServerCfg, procInfo *ProcessInfo, wg *sync.WaitGr
 	}
 
 	eventEngine.Register(
-		nerv.Subscriber{
+		nerv.Consumer{
 			Id: appReaperId,
 			Fn: createReaperFunction(procInfo, wg),
 		})

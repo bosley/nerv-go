@@ -1,17 +1,16 @@
 # nerv-go
 
-Usage:
+### Nerv
 
-```
-    -rti        path            absolute path to nerv file to use for command
-    -up         <NONE>          start a server
-    -down       <NONE>          stop running server
-    -force      <NONE>          force kills nerv instance when used in conjunction with -down
-    -clean      <NONE>          cleans up potential cruft left after a force kill
-    -filter     <NONE>          disable unregistered producers from submitting to endpoints
-    -grace      N               set number of seconds to permit when attempting graceful shutdown
-    -address    port:ip         set the address/port to bind server to
-```
+Nerv is a simple pub/sub eventing engine for applications that
+want to to process events in parallel. 
+
+Nerv offers the ability to spin-up an http endpoint for event submissions, and
+has a set of client-side functions that can be used to submit data to a nerv instance.
+
+This project is meant to be used as a library to extend applications but it does offer a CLI server
+found in `/cli` that can be used as an example of how to use nerv, as-well-as being used for
+testing nerv-based application
 
 ### Starting/ Stopping server instance
 
@@ -38,11 +37,6 @@ Same things as above, but with defaults:
 ### Posting Event
 
 ```
-
+./nerv -emit -topic "some.topic" -prod "my.producer.id" -data "some fancy string data"
 ```
 
-### Monitoring a topic
-
-```
-
-```

@@ -28,7 +28,7 @@ type Engine struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	server *NervServer
+	server *HttpEndpoint
 
 	running bool
 
@@ -82,7 +82,7 @@ func (eng *Engine) WithCallbacks(cbs EngineCallbacks) *Engine {
 	return eng
 }
 
-func (eng *Engine) WithServer(cfg NervServerCfg) *Engine {
+func (eng *Engine) WithHttpEndpoint(cfg HttpEndpointCfg) *Engine {
 
 	if eng.server != nil {
 		return eng

@@ -21,20 +21,20 @@ const (
 var ErrServerAlreadyRunning = errors.New("server already running")
 var ErrServerNotRunning = errors.New("server not running")
 
-type NervServer struct {
+type HttpEndpoint struct {
 	wg               *sync.WaitGroup
 	engine           *Engine
 	server           *http.Server
 	shutdownDuration time.Duration
 }
 
-type NervServerCfg struct {
+type HttpEndpointCfg struct {
 	Address                  string
 	GracefulShutdownDuration time.Duration
 }
 
-func HttpServer(cfg NervServerCfg, engine *Engine) *NervServer {
-	return &NervServer{
+func HttpServer(cfg HttpEndpointCfg, engine *Engine) *HttpEndpoint {
+	return &HttpEndpoint{
 		wg:               nil,
 		engine:           engine,
 		server:           &http.Server{Addr: cfg.Address},
@@ -42,23 +42,23 @@ func HttpServer(cfg NervServerCfg, engine *Engine) *NervServer {
 	}
 }
 
-func (nrvs *NervServer) Start() error {
+func (ep *HttpEndpoint) Start() error {
 
 	slog.Info("nerv:server:start")
 
-	if nrvs.wg != nil {
+	if ep.wg != nil {
 		return ErrServerAlreadyRunning
 	}
 
-	http.HandleFunc(endpointSubmit, nrvs.handleSubmission())
-	http.HandleFunc(endpointPing, nrvs.handlePing())
+	http.HandleFunc(endpointSubmit, ep.handleSubmission())
+	http.HandleFunc(endpointPing, ep.handlePing())
 
-	nrvs.wg = new(sync.WaitGroup)
-	nrvs.wg.Add(1)
+	ep.wg = new(sync.WaitGroup)
+	ep.wg.Add(1)
 
 	go func() {
-		defer nrvs.wg.Done()
-		if err := nrvs.server.ListenAndServe(); err != http.ErrServerClosed {
+		defer ep.wg.Done()
+		if err := ep.server.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("error starting http - port already in use?")
 			os.Exit(1)
 		}
@@ -67,30 +67,30 @@ func (nrvs *NervServer) Start() error {
 	return nil
 }
 
-func (nrvs *NervServer) Stop() error {
+func (ep *HttpEndpoint) Stop() error {
 
 	slog.Info("nerv:server:stop")
 
-	if nrvs.wg == nil {
+	if ep.wg == nil {
 		return ErrServerNotRunning
 	}
 
 	shutdownCtx, shutdownRelease := context.WithTimeout(
 		context.Background(),
-		nrvs.shutdownDuration)
+		ep.shutdownDuration)
 
 	defer shutdownRelease()
 
-	if err := nrvs.server.Shutdown(shutdownCtx); err != nil {
+	if err := ep.server.Shutdown(shutdownCtx); err != nil {
 		panic(err)
 	}
 
-	nrvs.wg.Wait()
-	nrvs.wg = nil
+	ep.wg.Wait()
+	ep.wg = nil
 	return nil
 }
 
-func (nrvs *NervServer) handlePing() func(http.ResponseWriter, *http.Request) {
+func (ep *HttpEndpoint) handlePing() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
 
 		slog.Debug("ping")
@@ -100,7 +100,7 @@ func (nrvs *NervServer) handlePing() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Request) {
+func (ep *HttpEndpoint) handleSubmission() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
 
 		body, err := ioutil.ReadAll(req.Body)
@@ -122,13 +122,13 @@ func (nrvs *NervServer) handleSubmission() func(http.ResponseWriter, *http.Reque
 
 		event := reqWrapper.EventData
 
-		if !nrvs.engine.ContainsTopic(&event.Topic) {
+		if !ep.engine.ContainsTopic(&event.Topic) {
 			writer.WriteHeader(400)
 			writer.Write([]byte("unknown topic"))
 			return
 		}
 
-		if err := nrvs.engine.SubmitEvent(event); err != nil {
+		if err := ep.engine.SubmitEvent(event); err != nil {
 			slog.Warn("failed to submit to event engine", "err", err.Error())
 			writer.WriteHeader(503)
 			return
