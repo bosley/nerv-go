@@ -8,7 +8,7 @@ import (
 )
 
 type testItem struct {
-	sub    Subscriber
+	sub    Consumer
 	recvd  *[]*Event
 	topics []string
 }
@@ -28,7 +28,6 @@ func TestServer(t *testing.T) {
 		WithServer(
 			NervServerCfg{
 				Address:                  address,
-				AllowUnknownProducers:    true,
 				GracefulShutdownDuration: 2 * time.Second,
 			})
 
@@ -58,14 +57,12 @@ func TestServer(t *testing.T) {
 	}
 
 	for _, topic := range topics1 {
-		response, e := SubmitNewTopicRequest(address,
+		if err := engine.CreateTopic(
 			NewTopic(topic).
 				UsingBroadcast().
-				UsingNoSelection())
-		if e != nil {
-			t.Fatalf("err:%v", e)
+				UsingNoSelection()); err != nil {
+			t.Fatalf("err:%v", err)
 		}
-		slog.Debug("http topic create", "status", response.Status)
 	}
 
 	items := []*testItem{
@@ -94,6 +91,7 @@ func TestServer(t *testing.T) {
 			t.Fatalf("err:%v", err)
 		}
 		slog.Debug("response", "status", resp.Status, "body", resp.Body)
+    time.Sleep(10 * time.Millisecond)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -118,37 +116,25 @@ func TestServer(t *testing.T) {
 func buildTestItem(t *testing.T, engine *Engine, address string, id string, topics []string) *testItem {
 	recvd := make([]*Event, 0)
 	ti := testItem{
-		sub: Subscriber{
+		sub: Consumer{
 			Id: id,
-			Fn: buildSubscriber(id, &recvd),
+			Fn: buildConsumer(id, &recvd),
 		},
 		recvd:  &recvd,
 		topics: topics,
 	}
 
-	// TODO: Need to find a way to hook local callback to a fwd from the server
-	//       for testing. IRL it won't be a problem...
 	engine.Register(ti.sub)
 
-	// TODO: Since we can't do this easily in test without creating an infinite
-	//       event loop, we will have an integration test that checks
-	//       the functionality of remote receivers down the line
-
-	//_, err := SubmitRegistrationRequest(address, address, id)
-	//if err != nil {
-	//  t.Fatalf("err:%v", err)
-	//}
-
-	for _, topic := range topics {
-		_, err := SubmitSubscriptionRequest(address, topic, id)
-		if err != nil {
+	for _, top := range topics {
+		if err := engine.SubscribeTo(top, id); err != nil {
 			t.Fatalf("err:%v", err)
 		}
 	}
 	return &ti
 }
 
-func buildSubscriber(id string, recvd *[]*Event) EventRecvr {
+func buildConsumer(id string, recvd *[]*Event) EventRecvr {
 	return func(event *Event) {
 		slog.Debug("event received", "by", id, "about", event.Topic, "from", event.Producer)
 		*recvd = append(*recvd, event)
