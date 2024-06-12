@@ -14,7 +14,7 @@ const (
 )
 
 type RequestEventSubmission struct {
-	// Auth ,,,
+	Auth      interface{}
 	EventData Event
 }
 
@@ -53,6 +53,21 @@ func SubmitPing(address string, count int, max_failures int) PingResponse {
 		}
 	}
 	return pr
+}
+
+// Submit an event with the optional Auth interface. Auth will be encoded into JSON
+// with the rest of the message. The server, detecting Auth, will execute server-side
+// callback to have the information analyzed, and conditionally, permit the event submission
+func SubmitEventWithAuth(address string, event *Event, auth interface{}) (*SubmissionResponse, error) {
+	out := RequestEventSubmission{
+		Auth:      auth,
+		EventData: *event,
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return send(fmtEndpoint(address, endpointSubmit), encoded)
 }
 
 func SubmitEvent(address string, event *Event) (*SubmissionResponse, error) {

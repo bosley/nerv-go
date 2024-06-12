@@ -26,11 +26,19 @@ type HttpEndpoint struct {
 	engine           *Engine
 	server           *http.Server
 	shutdownDuration time.Duration
+	authCb           HttpAuthCb
 }
+
+// Within RequestEventSubmission, we optionally add Auth
+// with allows users to encode their preferred auth info.
+// This cb sends that back to the user to perform auth,
+// then a simple T/F return dictates if the request is ok
+type HttpAuthCb func(authData interface{}) bool
 
 type HttpEndpointCfg struct {
 	Address                  string
 	GracefulShutdownDuration time.Duration
+	AuthCb                   HttpAuthCb
 }
 
 func HttpServer(cfg HttpEndpointCfg, engine *Engine) *HttpEndpoint {
@@ -39,6 +47,7 @@ func HttpServer(cfg HttpEndpointCfg, engine *Engine) *HttpEndpoint {
 		engine:           engine,
 		server:           &http.Server{Addr: cfg.Address},
 		shutdownDuration: cfg.GracefulShutdownDuration,
+		authCb:           cfg.AuthCb,
 	}
 }
 
@@ -121,6 +130,18 @@ func (ep *HttpEndpoint) handleSubmission() func(http.ResponseWriter, *http.Reque
 		}
 
 		event := reqWrapper.EventData
+
+		if ep.authCb != nil {
+			auth := reqWrapper.Auth
+			if auth == nil {
+				slog.Warn("event submission rejection - missing auth", "topic", event.Topic, "producer", event.Producer)
+				writer.WriteHeader(401)
+			}
+			if !ep.authCb(auth) {
+				slog.Warn("event submission auth failure", "topic", event.Topic, "producer", event.Producer)
+				writer.WriteHeader(401)
+			}
+		}
 
 		if !ep.engine.ContainsTopic(&event.Topic) {
 			writer.WriteHeader(400)
