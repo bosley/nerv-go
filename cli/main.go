@@ -60,37 +60,36 @@ func main() {
 	cleanPtr := flag.Bool("clean", false, "Kills a server iff its running, and then wipes the rti file")
 	forcePtr := flag.Bool("force", false, "Force kills nerv instance when used with -down")
 
-  topicPtr := flag.String("topic", appChannel, "Set topic for event")
-  senderPtr := flag.String("prod", "human.cli", "Set the producer for an event")
-  eventDataPtr := flag.String("data", "[TEST EVENT]", "Set string data for event to send using -emit")
-  eventPtr := flag.Bool("emit", false, "Emit an event with topic/producer given by [-topic -prod]")
-
+	topicPtr := flag.String("topic", appChannel, "Set topic for event")
+	senderPtr := flag.String("prod", "human.cli", "Set the producer for an event")
+	eventDataPtr := flag.String("data", "[TEST EVENT]", "Set string data for event to send using -emit")
+	eventPtr := flag.Bool("emit", false, "Emit an event with topic/producer given by [-topic -prod]")
 
 	flag.Parse()
 
-  if *pingPtr {
-    pr := nerv.SubmitPing(*addrPtr, 10, 10)
-    fmt.Println(
-      fmt.Sprintf("Ping finished %d/%d pings failed", pr.TotalFails, pr.TotalPings))
-    os.Exit(0)
-  }
+	if *pingPtr {
+		pr := nerv.SubmitPing(*addrPtr, 10, 10)
+		fmt.Println(
+			fmt.Sprintf("Ping finished %d/%d pings failed", pr.TotalFails, pr.TotalPings))
+		os.Exit(0)
+	}
 
-  if *eventPtr {
-    sr, err := nerv.SubmitEvent(
-      *addrPtr,
-      &nerv.Event{
-        Spawned: time.Now(),
-        Topic: *topicPtr,
-        Producer: *senderPtr,
-        Data: eventDataPtr,
-      })
-    if err != nil {
-      fmt.Println(err)
-      os.Exit(exitCodeErr)
-    }
-    fmt.Println(sr.Status)
-    os.Exit(0)
-  }
+	if *eventPtr {
+		sr, err := nerv.SubmitEvent(
+			*addrPtr,
+			&nerv.Event{
+				Spawned:  time.Now(),
+				Topic:    *topicPtr,
+				Producer: *senderPtr,
+				Data:     eventDataPtr,
+			})
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(exitCodeErr)
+		}
+		fmt.Println(sr.Status)
+		os.Exit(0)
+	}
 
 	serverCfg := nerv.HttpEndpointCfg{
 		Address:                  *addrPtr,
