@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd cli
+cd example
 
 go build -o nerv . && mv nerv ../
 
