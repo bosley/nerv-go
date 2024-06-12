@@ -1,18 +1,18 @@
 package modhttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/bosley/nerv-go"
 	"io/ioutil"
 	"log/slog"
 	"net/http"
 	"os"
 	"sync"
 	"time"
-	"bytes"
-	"fmt"
-  "github.com/bosley/nerv-go"
 )
 
 const (
@@ -20,8 +20,8 @@ const (
 )
 
 type RequestEventSubmission struct {
-	Auth      interface{}
-	Event nerv.Event 
+	Auth  interface{}
+	Event nerv.Event
 }
 
 type SubmissionResponse struct {
@@ -48,7 +48,7 @@ type Endpoint struct {
 	server           *http.Server
 	shutdownDuration time.Duration
 	authCb           AuthCb
-  submitter        *nerv.ModuleSubmitter
+	submitter        *nerv.ModuleSubmitter
 }
 
 // Within RequestEventSubmission, we optionally add Auth
@@ -70,7 +70,7 @@ func New(cfg Config, engine *nerv.Engine) *Endpoint {
 		server:           &http.Server{Addr: cfg.Address},
 		shutdownDuration: cfg.GracefulShutdownDuration,
 		authCb:           cfg.AuthCb,
-    submitter:        nil,
+		submitter:        nil,
 	}
 }
 
@@ -111,7 +111,7 @@ func (ep *Endpoint) IndShutdown() {
 	slog.Info("modhttp:server:shutdown")
 
 	if ep.wg == nil {
-		return 
+		return
 	}
 
 	shutdownCtx, shutdownRelease := context.WithTimeout(
@@ -142,9 +142,9 @@ func (ep *Endpoint) handlePing() func(http.ResponseWriter, *http.Request) {
 func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
 
-    if ep.submitter == nil {
+		if ep.submitter == nil {
 			writer.WriteHeader(503)
-    }
+		}
 
 		body, err := ioutil.ReadAll(req.Body)
 
@@ -183,8 +183,7 @@ func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) 
 			return
 		}
 
-
-    ep.submitter.SubmitEvent(&event)
+		ep.submitter.SubmitEvent(&event)
 
 		writer.WriteHeader(200)
 		return
@@ -223,7 +222,7 @@ func SubmitPing(address string, count int, max_failures int) PingResponse {
 // callback to have the information analyzed, and conditionally, permit the event submission
 func SubmitEventWithAuth(address string, event *nerv.Event, auth interface{}) (*SubmissionResponse, error) {
 	out := RequestEventSubmission{
-		Auth:      auth,
+		Auth:  auth,
 		Event: *event,
 	}
 	encoded, err := json.Marshal(out)

@@ -13,8 +13,8 @@ const (
 	nervTopicInternal = "nerv.internal"
 )
 
-var ErrEngineAlreadyRunning = errors.New("server already running")
-var ErrEngineNotRunning = errors.New("server not running")
+var ErrEngineAlreadyRunning = errors.New("engine already running")
+var ErrEngineNotRunning = errors.New("engine not running")
 var ErrEngineUnknownTopic = errors.New("unknown topic")
 var ErrEngineUnknownConsumer = errors.New("unknown consumer")
 var ErrEngineDuplicateTopic = errors.New("duplicate topic")
@@ -34,8 +34,6 @@ type Engine struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	server *HttpEndpoint
-
 	running bool
 
 	callbacks EngineCallbacks
@@ -54,7 +52,6 @@ func NewEngine() *Engine {
 		consumers: make(map[string]EventRecvr),
 		modules:   make(map[string]Module),
 		eventChan: make(chan Event),
-		server:    nil,
 		running:   false,
 		callbacks: EngineCallbacks{
 			nil,
@@ -86,24 +83,6 @@ func (eng *Engine) WithTopics(topics []*TopicCfg) *Engine {
 
 func (eng *Engine) WithCallbacks(cbs EngineCallbacks) *Engine {
 	eng.callbacks = cbs
-	return eng
-}
-
-func (eng *Engine) WithHttpEndpoint(cfg HttpEndpointCfg) *Engine {
-
-	if eng.server != nil {
-		return eng
-	}
-
-	eng.server = HttpServer(cfg, eng)
-
-	if eng.running {
-		if err := eng.server.Start(); err != nil {
-			slog.Error("err:%v", err)
-			panic("Failed to start endpoint server with running engine")
-		}
-	}
-
 	return eng
 }
 
@@ -156,11 +135,7 @@ func (eng *Engine) Start() error {
 		mod.IndStart()
 	}
 
-	if eng.server == nil {
-		return nil
-	}
-
-	return eng.server.Start()
+	return nil
 }
 
 func (eng *Engine) Stop() error {

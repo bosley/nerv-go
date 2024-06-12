@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"github.com/bosley/nerv-go"
+	"github.com/bosley/nerv-go/modhttp"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -82,5 +82,5 @@ func (p *ProcessInfo) IsRunning() bool {
 }
 
 func (p *ProcessInfo) IsReachable() bool {
-	return nerv.SubmitPing(p.Address, 1, -1).TotalFails == 0
+	return modhttp.SubmitPing(p.Address, 1, -1).TotalFails == 0
 }

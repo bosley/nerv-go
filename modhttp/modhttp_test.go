@@ -1,12 +1,12 @@
 package modhttp
 
 import (
+	"fmt"
+	"github.com/bosley/nerv-go"
 	"log/slog"
 	"os"
-  "fmt"
-	"time"
 	"testing"
-  "github.com/bosley/nerv-go"
+	"time"
 )
 
 type testItem struct {
@@ -29,30 +29,30 @@ func TestServer(t *testing.T) {
 				})))
 
 	address := "127.0.0.1:8098"
-  topicName := "module.http"
+	topicName := "module.http"
 
 	engine := nerv.NewEngine()
-  
-  mod := New(
-    Config{
-				Address: address,
-				GracefulShutdownDuration: 2 * time.Second,
-				AuthCb: func(req *RequestEventSubmission) bool {
-					slog.Debug("http auth callback", "topic", req.Event.Topic, "prod", req.Event.Producer)
-					return req.Auth.(string) == testApiToken
-				}}, engine)
+
+	mod := New(
+		Config{
+			Address:                  address,
+			GracefulShutdownDuration: 2 * time.Second,
+			AuthCb: func(req *RequestEventSubmission) bool {
+				slog.Debug("http auth callback", "topic", req.Event.Topic, "prod", req.Event.Producer)
+				return req.Auth.(string) == testApiToken
+			}}, engine)
 
 	topic := nerv.NewTopic(topicName).
 		UsingBroadcast().
 		UsingArbitrary()
 
-  consumerARecv := false
+	consumerARecv := false
 
-  consumers := []nerv.Consumer{
-    nerv.Consumer{
+	consumers := []nerv.Consumer{
+		nerv.Consumer{
 			Id: "http.receiver.a",
-			Fn:func(event *nerv.Event) {
-        fmt.Println("receiver got http event")
+			Fn: func(event *nerv.Event) {
+				fmt.Println("receiver got http event")
 				consumerARecv = true
 			},
 		}}
@@ -71,19 +71,20 @@ func TestServer(t *testing.T) {
 
 	fmt.Println("[ENGINE STARTED]")
 
-  time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	sender := func() {
-    SubmitEventWithAuth(
-      address,
-      &nerv.Event{
-        Spawned: time.Now(),
-        Topic:   topicName,
-        Producer:"http.client",
-        Data:    "some simple test data",
-      },
-      testApiToken,
-    )}
+		SubmitEventWithAuth(
+			address,
+			&nerv.Event{
+				Spawned:  time.Now(),
+				Topic:    topicName,
+				Producer: "http.client",
+				Data:     "some simple test data",
+			},
+			testApiToken,
+		)
+	}
 
 	sender()
 

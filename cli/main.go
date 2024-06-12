@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bosley/nerv-go"
+	"github.com/bosley/nerv-go/modhttp"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -69,17 +70,17 @@ func main() {
 	flag.Parse()
 
 	if *pingPtr {
-		pr := nerv.SubmitPing(*addrPtr, 10, 10)
+		pr := modhttp.SubmitPing(*addrPtr, 10, 10)
 		fmt.Println(
 			fmt.Sprintf("Ping finished %d/%d pings failed", pr.TotalFails, pr.TotalPings))
 		os.Exit(0)
 	}
 
-	var authCb nerv.HttpAuthCb
+	var authCb modhttp.AuthCb
 
 	if *tokenPtr != "_UNUSED_" {
 		slog.Debug("setting up auth cb")
-		authCb = func(req *nerv.RequestEventSubmission) bool {
+		authCb = func(req *modhttp.RequestEventSubmission) bool {
 			slog.Debug("auth request")
 			return req.Auth.(string) == *tokenPtr
 		}
@@ -96,12 +97,12 @@ func main() {
 			Data:     eventDataPtr,
 		}
 		var err error
-		var sr *nerv.SubmissionResponse
+		var sr *modhttp.SubmissionResponse
 		if authCb == nil {
-			sr, err = nerv.SubmitEvent(*addrPtr, eventOut)
+			sr, err = modhttp.SubmitEvent(*addrPtr, eventOut)
 		} else {
 			slog.Warn("submit with auth", "token", *tokenPtr)
-			sr, err = nerv.SubmitEventWithAuth(*addrPtr, eventOut, *tokenPtr)
+			sr, err = modhttp.SubmitEventWithAuth(*addrPtr, eventOut, *tokenPtr)
 		}
 		if err != nil {
 			fmt.Println(err)
@@ -111,7 +112,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	serverCfg := nerv.HttpEndpointCfg{
+	serverCfg := modhttp.Config{
 		Address:                  *addrPtr,
 		GracefulShutdownDuration: time.Duration(*sdtPtr) * time.Second,
 		AuthCb:                   authCb,
@@ -190,7 +191,7 @@ func doKillProc(file string, force bool) {
 	fmt.Println("success")
 }
 
-func doHost(cfg nerv.HttpEndpointCfg, fileName *string) {
+func doHost(cfg modhttp.Config, fileName *string) {
 
 	if checkIfRunning(*fileName) {
 		slog.Error("server already running with configuration specified", "cfg file", *fileName)
@@ -216,11 +217,25 @@ func doHost(cfg nerv.HttpEndpointCfg, fileName *string) {
 
 }
 
-func LaunchServer(cfg nerv.HttpEndpointCfg, procInfo *ProcessInfo, wg *sync.WaitGroup) {
+func LaunchServer(cfg modhttp.Config, procInfo *ProcessInfo, wg *sync.WaitGroup) {
 
 	slog.Debug("LaunchServer", "address", cfg.Address, "pid", procInfo.PID)
 
-	eventEngine = nerv.NewEngine().WithHttpEndpoint(cfg)
+	eventEngine = nerv.NewEngine()
+
+	mod := modhttp.New(cfg, eventEngine)
+
+	topic := nerv.NewTopic("topic.http").
+		UsingBroadcast().
+		UsingArbitrary()
+
+	if err := eventEngine.UseModule(
+		mod,
+		topic,
+		[]nerv.Consumer{}); err != nil {
+		slog.Error("unable to add http module")
+		os.Exit(exitCodeErr)
+	}
 
 	StartEngine()
 
@@ -229,7 +244,7 @@ func LaunchServer(cfg nerv.HttpEndpointCfg, procInfo *ProcessInfo, wg *sync.Wait
 	time.Sleep(1 * time.Second)
 
 	if !procInfo.IsReachable() {
-		slog.Warn("unable to reach recently started server")
+		slog.Error("unable to reach recently started server")
 		os.Exit(exitCodeErr)
 	}
 
