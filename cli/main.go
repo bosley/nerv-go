@@ -79,8 +79,9 @@ func main() {
 
 	if *tokenPtr != "_UNUSED_" {
 		slog.Debug("setting up auth cb")
-		authCb = func(token interface{}) bool {
-			return token.(string) == *tokenPtr
+		authCb = func(req *nerv.RequestEventSubmission) bool {
+			slog.Debug("auth request")
+			return req.Auth.(string) == *tokenPtr
 		}
 	} else {
 		slog.Debug("no auth selected")
