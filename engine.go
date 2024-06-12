@@ -10,7 +10,7 @@ import (
 )
 
 const (
-  nervTopicInternal = "nerv.internal"
+	nervTopicInternal = "nerv.internal"
 )
 
 var ErrEngineAlreadyRunning = errors.New("server already running")
@@ -23,7 +23,7 @@ type Engine struct {
 	topics    map[string]*eventTopic
 	consumers map[string]EventRecvr
 
-  modules map[string]Module
+	modules map[string]Module
 
 	topicMu sync.Mutex
 	subMu   sync.Mutex
@@ -52,7 +52,7 @@ func NewEngine() *Engine {
 	eng := &Engine{
 		topics:    make(map[string]*eventTopic),
 		consumers: make(map[string]EventRecvr),
-    modules:   make(map[string]Module),
+		modules:   make(map[string]Module),
 		eventChan: make(chan Event),
 		server:    nil,
 		running:   false,
@@ -151,10 +151,10 @@ func (eng *Engine) Start() error {
 		}
 	}()
 
-  for name, mod := range eng.modules {
-    slog.Debug("indicating start to module", "module", name)
-    mod.IndStart()
-  }
+	for name, mod := range eng.modules {
+		slog.Debug("indicating start to module", "module", name)
+		mod.IndStart()
+	}
 
 	if eng.server == nil {
 		return nil
@@ -171,10 +171,10 @@ func (eng *Engine) Stop() error {
 		return ErrEngineNotRunning
 	}
 
-  for name, mod := range eng.modules {
-    slog.Debug("indicating shutdown to module", "module", name)
-    mod.IndShutdown()
-  }
+	for name, mod := range eng.modules {
+		slog.Debug("indicating shutdown to module", "module", name)
+		mod.IndShutdown()
+	}
 
 	close(eng.eventChan)
 
@@ -413,35 +413,40 @@ func publishDirect(event *Event, topic *eventTopic) {
 }
 
 func (eng *Engine) UseModule(
-  mod Module,
-  productionTarget *TopicCfg,
-  consumers []Consumer) error {
+	mod Module,
+	productionTarget *TopicCfg,
+	consumers []Consumer) error {
 
-  // Create topic that the module will publish on, 
-  // and ensure that the module has a unique name
-  if err := eng.CreateTopic(productionTarget); err != nil {
-    return err
-  }
+	// Create topic that the module will publish on,
+	// and ensure that the module has a unique name
+	if err := eng.CreateTopic(productionTarget); err != nil {
+		return err
+	}
 
-  // Setup a submitter on the module so it can post
-  // data to the event bus as its [name].producer
-  mod.SetSubmitterFn(func(data interface{}) {
-    eng.Submit(
-      fmt.Sprintf("%s.producer", productionTarget.Name), 
-      productionTarget.Name,
-      data)
-  })
+	// Setup a submitter on the module so it can post
+	// data to the event bus as its [name].producer
+	mod.SetSubmitter(&ModuleSubmitter{
+		SubmitData: func(data interface{}) {
+			eng.Submit(
+				fmt.Sprintf("%s.producer", productionTarget.Name),
+				productionTarget.Name,
+				data)
+		},
+		SubmitEvent: func(event *Event) {
+			eng.SubmitEvent(*event)
+		},
+	})
 
-  // Register all consumers that the user gave us
-  // that will receive the events of the producer
-  for _, consumer := range consumers {
-    eng.Register(consumer)
+	// Register all consumers that the user gave us
+	// that will receive the events of the producer
+	for _, consumer := range consumers {
+		eng.Register(consumer)
 
-    if err := eng.subscribeTo(productionTarget.Name, consumer.Id); err != nil {
-      return err
-    }
-  }
+		if err := eng.subscribeTo(productionTarget.Name, consumer.Id); err != nil {
+			return err
+		}
+	}
 
-  eng.modules[productionTarget.Name] = mod
-  return nil
+	eng.modules[productionTarget.Name] = mod
+	return nil
 }
