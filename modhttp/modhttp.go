@@ -1,3 +1,8 @@
+/*
+  This module creates a simple http endpoint with callback auth to
+  submit events to a local nerv engine.
+*/
+
 package modhttp
 
 import (
@@ -16,8 +21,18 @@ import (
 )
 
 const (
-	protocolString = "http://"
+	protocolString   = "http://"
+	endpointPing     = "/ping"
+	endpointSubmit   = "/submit"
+	endpointPingResp = "Кто там?"
 )
+
+var ErrServerAlreadyRunning = errors.New("server already running")
+
+type PingResponse struct {
+	TotalPings int
+	TotalFails int
+}
 
 type RequestEventSubmission struct {
 	Auth  interface{}
@@ -29,19 +44,9 @@ type SubmissionResponse struct {
 	Body   string
 }
 
-type PingResponse struct {
-	TotalPings int
-	TotalFails int
-}
-
-const (
-	endpointPing     = "/ping"
-	endpointSubmit   = "/submit"
-	endpointPingResp = "Кто там?"
-)
-
-var ErrServerAlreadyRunning = errors.New("server already running")
-
+// Endpoint is the http endpoint that contains all of the
+// required data to get http off the wire and formed into
+// a proper nerv event for publishing
 type Endpoint struct {
 	wg               *sync.WaitGroup
 	engine           *nerv.Engine
@@ -63,6 +68,59 @@ type Config struct {
 	AuthCb                   AuthCb
 }
 
+// Submit an event with the optional Auth interface. Auth will be encoded into JSON
+// with the rest of the message. The server, detecting Auth, will execute server-side
+// callback to have the information analyzed, and conditionally, permit the event submission
+func SubmitEventWithAuth(address string, event *nerv.Event, auth interface{}) (*SubmissionResponse, error) {
+	out := RequestEventSubmission{
+		Auth:  auth,
+		Event: *event,
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return send(fmtEndpoint(address, endpointSubmit), encoded)
+}
+
+// Submit an event without Auth information
+func SubmitEvent(address string, event *nerv.Event) (*SubmissionResponse, error) {
+	out := RequestEventSubmission{
+		Event: *event,
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+	return send(fmtEndpoint(address, endpointSubmit), encoded)
+}
+
+// Attempt to ping a server to see if its actually a nerv modhttp
+func SubmitPing(address string, count int, max_failures int) PingResponse {
+	pr := PingResponse{
+		TotalPings: 0,
+		TotalFails: 0,
+	}
+	for x := 0; x < count; x++ {
+		slog.Debug("client:SubmitPing", "address", address, "total", count, "current", x)
+		resp, err := send(fmtEndpoint(address, endpointPing), []byte{})
+		pr.TotalPings += 1
+		if err == nil && resp != nil && resp.Status == "200 OK" {
+			slog.Debug("ping success")
+		} else {
+			slog.Debug("ping failure")
+			pr.TotalFails += 1
+			if max_failures != -1 && max_failures <= pr.TotalFails {
+				slog.Debug("reached fail limit", "max", max_failures)
+				return pr
+			}
+		}
+	}
+	return pr
+}
+
+// Create the endpoint structure that will be used as the nerv Module
+// interface
 func New(cfg Config, engine *nerv.Engine) *Endpoint {
 	return &Endpoint{
 		wg:               nil,
@@ -74,6 +132,9 @@ func New(cfg Config, engine *nerv.Engine) *Endpoint {
 	}
 }
 
+// Module interface requirement - Sets the means to submit to engine
+//
+//	for modules that don't have engine references.
 func (ep *Endpoint) SetSubmitter(s *nerv.ModuleSubmitter) {
 	if ep.submitter != nil {
 		return
@@ -81,9 +142,10 @@ func (ep *Endpoint) SetSubmitter(s *nerv.ModuleSubmitter) {
 	ep.submitter = s
 }
 
+// Module interface requirement - Obvious functionality
 func (ep *Endpoint) Start() error {
 
-	slog.Info("modhttp:server:start")
+	slog.Info("modhttp:start")
 
 	if ep.wg != nil {
 		return ErrServerAlreadyRunning
@@ -106,9 +168,10 @@ func (ep *Endpoint) Start() error {
 	return nil
 }
 
+// Module interface requirement - Obvious functionality
 func (ep *Endpoint) Shutdown() {
 
-	slog.Info("modhttp:server:shutdown")
+	slog.Info("modhttp:shutdown")
 
 	if ep.wg == nil {
 		return
@@ -132,7 +195,7 @@ func (ep *Endpoint) Shutdown() {
 func (ep *Endpoint) handlePing() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
 
-		slog.Debug("ping")
+		slog.Debug("modhttp:ping")
 
 		writer.WriteHeader(200)
 		writer.Write([]byte(endpointPingResp))
@@ -149,12 +212,12 @@ func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) 
 		body, err := ioutil.ReadAll(req.Body)
 
 		if err != nil {
-			slog.Error("modhttp:server:handleSubmission", "err", err.Error())
+			slog.Error("modhttp:handleSubmission", "err", err.Error())
 			writer.WriteHeader(400)
 			return
 		}
 
-		slog.Debug("modhttp:server:handleSubmission", "body", string(body))
+		slog.Debug("modhttp:handleSubmission", "body", string(body))
 
 		var reqWrapper RequestEventSubmission
 
@@ -192,55 +255,6 @@ func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) 
 
 func fmtEndpoint(address string, endpoint string) string {
 	return fmt.Sprintf("%s%s%s", protocolString, address, endpoint)
-}
-
-func SubmitPing(address string, count int, max_failures int) PingResponse {
-	pr := PingResponse{
-		TotalPings: 0,
-		TotalFails: 0,
-	}
-	for x := 0; x < count; x++ {
-		slog.Debug("client:SubmitPing", "address", address, "total", count, "current", x)
-		resp, err := send(fmtEndpoint(address, endpointPing), []byte{})
-		pr.TotalPings += 1
-		if err == nil && resp != nil && resp.Status == "200 OK" {
-			slog.Debug("ping success")
-		} else {
-			slog.Debug("ping failure")
-			pr.TotalFails += 1
-			if max_failures != -1 && max_failures <= pr.TotalFails {
-				slog.Debug("reached fail limit", "max", max_failures)
-				return pr
-			}
-		}
-	}
-	return pr
-}
-
-// Submit an event with the optional Auth interface. Auth will be encoded into JSON
-// with the rest of the message. The server, detecting Auth, will execute server-side
-// callback to have the information analyzed, and conditionally, permit the event submission
-func SubmitEventWithAuth(address string, event *nerv.Event, auth interface{}) (*SubmissionResponse, error) {
-	out := RequestEventSubmission{
-		Auth:  auth,
-		Event: *event,
-	}
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return nil, err
-	}
-	return send(fmtEndpoint(address, endpointSubmit), encoded)
-}
-
-func SubmitEvent(address string, event *nerv.Event) (*SubmissionResponse, error) {
-	out := RequestEventSubmission{
-		Event: *event,
-	}
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return nil, err
-	}
-	return send(fmtEndpoint(address, endpointSubmit), encoded)
 }
 
 func send(address string, data []byte) (*SubmissionResponse, error) {
