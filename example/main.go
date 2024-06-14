@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bosley/nerv-go"
-	"github.com/bosley/nerv-go/modhttp"
+	"github.com/bosley/nerv-go/modules/modhttp"
 	"log/slog"
 	"os"
 	"os/signal"

@@ -1,4 +1,4 @@
-module github.com/bosley/nerv-go/modhttp
+module github.com/bosley/nerv-go/modules/modhttp
 
 go 1.22.2
 

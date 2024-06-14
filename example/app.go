@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"github.com/bosley/nerv-go/modhttp"
+	"github.com/bosley/nerv-go/modules/modhttp"
 	"io/ioutil"
 	"log/slog"
 	"os"
