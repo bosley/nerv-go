@@ -53,7 +53,7 @@ type Endpoint struct {
 	server           *http.Server
 	shutdownDuration time.Duration
 	authCb           AuthCb
-  pane             *nerv.ModulePane
+	pane             *nerv.ModulePane
 }
 
 // Within RequestEventSubmission, we optionally add Auth
@@ -128,7 +128,7 @@ func New(cfg Config, engine *nerv.Engine) *Endpoint {
 		server:           &http.Server{Addr: cfg.Address},
 		shutdownDuration: cfg.GracefulShutdownDuration,
 		authCb:           cfg.AuthCb,
-		pane:        nil,
+		pane:             nil,
 	}
 }
 
@@ -140,7 +140,7 @@ func (ep *Endpoint) RecvModulePane(p *nerv.ModulePane) {
 }
 
 func (ep *Endpoint) GetName() string {
-  return "nerv.mod.http"
+	return "nerv.mod.http"
 }
 
 // Module interface requirement - Obvious functionality

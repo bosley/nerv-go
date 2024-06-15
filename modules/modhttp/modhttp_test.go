@@ -63,7 +63,7 @@ func TestServer(t *testing.T) {
 
 	if err := mod.pane.SubscribeTo(topicName, consumers, true); err != nil {
 		t.Fatalf("err: %v", err)
-  }
+	}
 
 	fmt.Println("starting engine")
 	if err := engine.Start(); err != nil {
