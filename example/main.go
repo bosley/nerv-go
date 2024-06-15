@@ -228,7 +228,7 @@ func LaunchServer(cfg modhttp.Config, procInfo *ProcessInfo, wg *sync.WaitGroup)
 		UsingBroadcast().
 		UsingArbitrary()
 
-  eventEngine.UseModule(
+	eventEngine.UseModule(
 		mod,
 		[]*nerv.TopicCfg{topic})
 
