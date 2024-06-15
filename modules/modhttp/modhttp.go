@@ -53,7 +53,7 @@ type Endpoint struct {
 	server           *http.Server
 	shutdownDuration time.Duration
 	authCb           AuthCb
-	submitter        *nerv.ModuleSubmitter
+  pane             *nerv.ModulePane
 }
 
 // Within RequestEventSubmission, we optionally add Auth
@@ -128,18 +128,19 @@ func New(cfg Config, engine *nerv.Engine) *Endpoint {
 		server:           &http.Server{Addr: cfg.Address},
 		shutdownDuration: cfg.GracefulShutdownDuration,
 		authCb:           cfg.AuthCb,
-		submitter:        nil,
+		pane:        nil,
 	}
 }
 
-// Module interface requirement - Sets the means to submit to engine
-//
-//	for modules that don't have engine references.
-func (ep *Endpoint) SetSubmitter(s *nerv.ModuleSubmitter) {
-	if ep.submitter != nil {
+func (ep *Endpoint) RecvModulePane(p *nerv.ModulePane) {
+	if ep.pane != nil {
 		return
 	}
-	ep.submitter = s
+	ep.pane = p
+}
+
+func (ep *Endpoint) GetName() string {
+  return "nerv.mod.http"
 }
 
 // Module interface requirement - Obvious functionality
@@ -205,7 +206,7 @@ func (ep *Endpoint) handlePing() func(http.ResponseWriter, *http.Request) {
 func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, req *http.Request) {
 
-		if ep.submitter == nil {
+		if ep.pane == nil {
 			writer.WriteHeader(503)
 		}
 
@@ -246,7 +247,7 @@ func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) 
 			return
 		}
 
-		ep.submitter.SubmitEvent(&event)
+		ep.pane.Submitter.SubmitEvent(&event)
 
 		writer.WriteHeader(200)
 		return

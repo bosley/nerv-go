@@ -85,7 +85,6 @@ func main() {
 			return req.Auth.(string) == *tokenPtr
 		}
 	} else {
-		slog.Debug("no auth selected")
 		authCb = nil
 	}
 
@@ -229,13 +228,9 @@ func LaunchServer(cfg modhttp.Config, procInfo *ProcessInfo, wg *sync.WaitGroup)
 		UsingBroadcast().
 		UsingArbitrary()
 
-	if err := eventEngine.UseModule(
+  eventEngine.UseModule(
 		mod,
-		topic,
-		[]nerv.Consumer{}); err != nil {
-		slog.Error("unable to add http module")
-		os.Exit(exitCodeErr)
-	}
+		[]*nerv.TopicCfg{topic})
 
 	StartEngine()
 
