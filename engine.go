@@ -429,16 +429,14 @@ func (eng *Engine) UseModule(
 	slog.Debug("setting up module", "name", mod.GetName())
 
 	modp := ModulePane{
-		Submitter: ModuleSubmitter{
-			SubmitEvent: func(event *Event) {
-				eng.SubmitEvent(*event)
-			},
-			SubmitTo: func(topic string, data interface{}) {
-				eng.Submit(
-					mod.GetName(),
-					topic,
-					data)
-			},
+		SubmitEvent: func(event *Event) {
+			eng.SubmitEvent(*event)
+		},
+		SubmitTo: func(topic string, data interface{}) {
+			eng.Submit(
+				mod.GetName(),
+				topic,
+				data)
 		},
 		SubscribeTo: func(topicName string, consumers []Consumer, performRegistration bool) error {
 			for _, consumer := range consumers {

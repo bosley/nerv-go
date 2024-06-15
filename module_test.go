@@ -102,7 +102,7 @@ func (s *tcpServer) serve() {
 		} else {
 			s.wg.Add(1)
 			go func() {
-				s.pane.Submitter.SubmitTo(moduleTopic, conn)
+				s.pane.SubmitTo(moduleTopic, conn)
 				s.wg.Done()
 			}()
 		}

@@ -247,7 +247,7 @@ func (ep *Endpoint) handleSubmission() func(http.ResponseWriter, *http.Request) 
 			return
 		}
 
-		ep.pane.Submitter.SubmitEvent(&event)
+		ep.pane.SubmitEvent(&event)
 
 		writer.WriteHeader(200)
 		return
