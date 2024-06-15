@@ -4,9 +4,8 @@ import (
 	"time"
 )
 
+// Something that receives a nerv event
 type EventRecvr func(event *Event)
-
-type DataRecvr func(data interface{})
 
 // Event structure that is pushed through the event engine and delivered
 // to the subscriber(s) of topics
@@ -27,28 +26,41 @@ type Consumer struct {
 // Interface used in nerv engine to manage modules
 // loaded in by the user
 type Module interface {
+	GetName() string
+	RecvModulePane(pane *ModulePane)
 	Start() error
 	Shutdown()
-	SetSubmitter(fn *ModuleSubmitter)
 }
 
-// Submission functions leveraged by modules
-//
-//	SubmitData -  Permits module to submit raw data as an event onto
-//	              its associated topic as its own producer, where consumers
-//	              registered to that function will recieve it
-//	SubmitEvent - Place an event onto the bus from the module that may or may
-//	              not go to consumers of the module. This function is useful
-//	              for fowarding events through a module without obfuscating
-//	              the original event
-type ModuleSubmitter struct {
-	SubmitData  DataRecvr
+// Interface for module to take action without
+// access to engine object
+type ModulePane struct {
+
+	// Retrieve whatever meta-data the users stored
+	// with the module
+	GetModuleMeta func(moduleName string) interface{}
+
+	// Subscribe a set of consumers to a topic. If register is TRUE, then the
+	// engine will be momentarily locked to ensure that the consumer is registered
+	// as subscription requires a registered consumer. It is safe to always pass TRUE
+	// but it map cause performance overhead if its called a lot as such
+	SubscribeTo func(topic string, consumers []Consumer, register bool) error
+
+	// Permits module to submit raw data as an event onto
+	// its associated topics as its own producer, where consumers
+	// registered to that function will recieve it
+	SubmitTo func(topic string, data interface{})
+
+	// Place an event onto the bus from the module that may or may
+	// not go to consumers of the module. This function is useful
+	// for fowarding events through a module without obfuscating
+	// the original event
 	SubmitEvent EventRecvr
 }
 
 // A handler interface made to permit handing off submission access to
 // structs and functions without handing over entire access to the
-// primary eventing engine
+// primary eventing engine and without having to make a whole module
 type SubmissionHandler interface {
 	Submit(topic string, data interface{}) error
 	SubmitAs(id string, topic string, data interface{}) error

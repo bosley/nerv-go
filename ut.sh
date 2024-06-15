@@ -2,7 +2,7 @@
 
 modules=(
   ./
-  modhttp
+  modules/modhttp
 )
 
 go clean -cache

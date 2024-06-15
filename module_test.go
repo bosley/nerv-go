@@ -12,34 +12,42 @@ import (
 	"time"
 )
 
+const (
+	moduleTopic = "module.tcp"
+)
+
 type tcpModule struct {
-	server    *tcpServer
-	address   string
-	submitter *ModuleSubmitter
+	server  *tcpServer
+	address string
+	pane    *ModulePane
 }
 
-func newTcpModule(address string) Module {
+func newTcpModule(address string) *tcpModule {
 	return &tcpModule{
-		server:    nil,
-		address:   address,
-		submitter: nil,
+		server:  nil,
+		address: address,
+		pane:    nil,
 	}
+}
+
+func (m *tcpModule) GetName() string {
+	return "TEST_TCP_MODULE"
 }
 
 func (m *tcpModule) Start() error {
 	var err error
-	m.server, err = newTcpServer(m.address, m.submitter)
+	m.server, err = newTcpServer(m.address, m.pane)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *tcpModule) SetSubmitter(s *ModuleSubmitter) {
-	if m.submitter != nil {
+func (m *tcpModule) RecvModulePane(p *ModulePane) {
+	if m.pane != nil {
 		return
 	}
-	m.submitter = s
+	m.pane = p
 }
 
 func (m *tcpModule) Shutdown() {
@@ -47,16 +55,16 @@ func (m *tcpModule) Shutdown() {
 }
 
 type tcpServer struct {
-	listener  net.Listener
-	quit      chan interface{}
-	wg        sync.WaitGroup
-	submitter *ModuleSubmitter
+	listener net.Listener
+	quit     chan interface{}
+	wg       sync.WaitGroup
+	pane     *ModulePane
 }
 
-func newTcpServer(addr string, submitter *ModuleSubmitter) (*tcpServer, error) {
+func newTcpServer(addr string, pane *ModulePane) (*tcpServer, error) {
 
-	if submitter == nil {
-		return nil, errors.New("no event submitter for tcp server. did Start() run before module registration?")
+	if pane == nil {
+		return nil, errors.New("no module pane for tcp server. did Start() run before module registration?")
 	}
 
 	s := &tcpServer{
@@ -66,7 +74,7 @@ func newTcpServer(addr string, submitter *ModuleSubmitter) (*tcpServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.submitter = submitter
+	s.pane = pane
 	s.listener = l
 	s.wg.Add(1)
 	go s.serve()
@@ -94,7 +102,7 @@ func (s *tcpServer) serve() {
 		} else {
 			s.wg.Add(1)
 			go func() {
-				s.submitter.SubmitData(conn)
+				s.pane.SubmitTo(moduleTopic, conn)
 				s.wg.Done()
 			}()
 		}
@@ -132,6 +140,7 @@ func makeDefaultHandler(id string, action func()) EventRecvr {
 func TestModules(t *testing.T) {
 
 	address := "127.0.0.1:20000"
+	modMetaData := 8675309
 
 	slog.SetDefault(
 		slog.New(
@@ -143,7 +152,7 @@ func TestModules(t *testing.T) {
 	engine := NewEngine()
 
 	mod := newTcpModule(address)
-	topic := NewTopic("module.tcp").
+	topic := NewTopic(moduleTopic).
 		UsingDirect().
 		UsingRoundRobinSelection()
 
@@ -171,11 +180,16 @@ func TestModules(t *testing.T) {
 		},
 	}
 
-	if err := engine.UseModule(
+	engine.UseModule(
 		mod,
-		topic,
-		consumers); err != nil {
-		t.Fatalf("err:%v", err)
+		[]*TopicCfg{topic})
+
+	if err := mod.pane.SubscribeTo(moduleTopic, consumers, true); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if err := engine.SetModuleMeta(mod.GetName(), modMetaData); err != nil {
+		t.Fatalf("err: %v", err)
 	}
 
 	fmt.Println("starting engine")
@@ -198,7 +212,23 @@ func TestModules(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	sender()
+
 	sender()
+
+	time.Sleep(1 * time.Second)
+
+	modMeta := engine.GetModuleMeta(mod.GetName())
+	if modMeta == nil {
+		t.Fatal("Unable to retrieve module meta data")
+	}
+
+	metaActual := modMeta.(int)
+
+	fmt.Println("retrieved module meta:", metaActual)
+
+	if metaActual != modMetaData {
+		t.Fatalf("expected %d, got %d for module meta", modMetaData, metaActual)
+	}
 
 	fmt.Println("stopping engine")
 	if err := engine.Stop(); err != nil {

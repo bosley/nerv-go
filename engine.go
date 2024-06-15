@@ -16,17 +16,24 @@ const (
 var ErrEngineAlreadyRunning = errors.New("engine already running")
 var ErrEngineNotRunning = errors.New("engine not running")
 var ErrEngineUnknownTopic = errors.New("unknown topic")
+var ErrEngineUnknownModule = errors.New("unknown module")
 var ErrEngineUnknownConsumer = errors.New("unknown consumer")
 var ErrEngineDuplicateTopic = errors.New("duplicate topic")
+
+type moduleMetaPair struct {
+	module Module
+	meta   interface{}
+}
 
 type Engine struct {
 	topics    map[string]*eventTopic
 	consumers map[string]EventRecvr
 
-	modules map[string]Module
+	mmp map[string]*moduleMetaPair
 
 	topicMu sync.Mutex
 	subMu   sync.Mutex
+	modMu   sync.Mutex
 	wg      sync.WaitGroup
 
 	eventChan chan Event
@@ -50,7 +57,7 @@ func NewEngine() *Engine {
 	eng := &Engine{
 		topics:    make(map[string]*eventTopic),
 		consumers: make(map[string]EventRecvr),
-		modules:   make(map[string]Module),
+		mmp:       make(map[string]*moduleMetaPair),
 		eventChan: make(chan Event),
 		running:   false,
 		callbacks: EngineCallbacks{
@@ -98,6 +105,30 @@ func (eng *Engine) ContainsConsumer(id *string) bool {
 	return ok
 }
 
+func (eng *Engine) SetModuleMeta(name string, data interface{}) error {
+	eng.modMu.Lock()
+	defer eng.modMu.Unlock()
+
+	mmp, ok := eng.mmp[name]
+	if !ok {
+		return ErrEngineUnknownModule
+	}
+	mmp.meta = data
+	return nil
+}
+
+func (eng *Engine) GetModuleMeta(name string) interface{} {
+	eng.modMu.Lock()
+	defer eng.modMu.Unlock()
+
+	mmp, ok := eng.mmp[name]
+	if !ok {
+		slog.Warn("attempt to retrieve meta for unknown module", "module", name)
+	}
+	// defaults to nil so w/e
+	return mmp.meta
+}
+
 func (eng *Engine) Start() error {
 
 	slog.Debug("Start", "running", eng.running)
@@ -130,9 +161,10 @@ func (eng *Engine) Start() error {
 		}
 	}()
 
-	for name, mod := range eng.modules {
-		slog.Debug("indicating start to module", "module", name)
-		mod.Start()
+	for name, mmp := range eng.mmp {
+		hasMeta := mmp.meta == nil
+		slog.Debug("indicating start to module", "module", name, "has_meta", hasMeta)
+		mmp.module.Start()
 	}
 
 	return nil
@@ -146,9 +178,9 @@ func (eng *Engine) Stop() error {
 		return ErrEngineNotRunning
 	}
 
-	for name, mod := range eng.modules {
+	for name, mmp := range eng.mmp {
 		slog.Debug("indicating shutdown to module", "module", name)
-		mod.Shutdown()
+		mmp.module.Shutdown()
 	}
 
 	close(eng.eventChan)
@@ -165,7 +197,7 @@ func (eng *Engine) checkCallback(fn EventRecvr, data interface{}) {
 		fn(&Event{
 			time.Now(),
 			"nerv.internal",
-			"nerv.engine",
+			"mmp.nerv.engine",
 			data,
 		})
 	}
@@ -389,39 +421,53 @@ func publishDirect(event *Event, topic *eventTopic) {
 
 func (eng *Engine) UseModule(
 	mod Module,
-	productionTarget *TopicCfg,
-	consumers []Consumer) error {
+	topics []*TopicCfg) {
 
-	// Create topic that the module will publish on,
-	// and ensure that the module has a unique name
-	if err := eng.CreateTopic(productionTarget); err != nil {
-		return err
-	}
+	eng.modMu.Lock()
+	defer eng.modMu.Unlock()
 
-	// Setup a submitter on the module so it can post
-	// data to the event bus as its [name].producer
-	mod.SetSubmitter(&ModuleSubmitter{
-		SubmitData: func(data interface{}) {
-			eng.Submit(
-				fmt.Sprintf("%s.producer", productionTarget.Name),
-				productionTarget.Name,
-				data)
-		},
+	slog.Debug("setting up module", "name", mod.GetName())
+
+	modp := ModulePane{
 		SubmitEvent: func(event *Event) {
 			eng.SubmitEvent(*event)
 		},
-	})
+		SubmitTo: func(topic string, data interface{}) {
+			eng.Submit(
+				mod.GetName(),
+				topic,
+				data)
+		},
+		SubscribeTo: func(topicName string, consumers []Consumer, performRegistration bool) error {
+			for _, consumer := range consumers {
+				if performRegistration {
+					eng.Register(consumer)
+				}
+				if err := eng.subscribeTo(topicName, consumer.Id); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		GetModuleMeta: eng.GetModuleMeta,
+	}
 
-	// Register all consumers that the user gave us
-	// that will receive the events of the producer
-	for _, consumer := range consumers {
-		eng.Register(consumer)
-
-		if err := eng.subscribeTo(productionTarget.Name, consumer.Id); err != nil {
-			return err
+	for _, topic := range topics {
+		// Create topic that the module will publish on,
+		// and ensure that the module has a unique name
+		if err := eng.CreateTopic(topic); err != nil {
+			if errors.Is(err, ErrEngineDuplicateTopic) {
+				slog.Info("topic has already been created", "name", topic.Name)
+			} else {
+				panic("error creating topic for module")
+			}
 		}
 	}
 
-	eng.modules[productionTarget.Name] = mod
-	return nil
+	mod.RecvModulePane(&modp)
+
+	eng.mmp[mod.GetName()] = &moduleMetaPair{
+		module: mod,
+		meta:   nil,
+	}
 }
