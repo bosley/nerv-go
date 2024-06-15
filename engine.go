@@ -389,39 +389,48 @@ func publishDirect(event *Event, topic *eventTopic) {
 
 func (eng *Engine) UseModule(
 	mod Module,
-	productionTarget *TopicCfg,
-	consumers []Consumer) error {
+	topics []*TopicCfg) {
 
-	// Create topic that the module will publish on,
-	// and ensure that the module has a unique name
-	if err := eng.CreateTopic(productionTarget); err != nil {
-		return err
+	slog.Debug("setting up module", "name", mod.GetName())
+
+	modp := ModulePane{
+		Submitter: ModuleSubmitter{
+			SubmitEvent: func(event *Event) {
+				eng.SubmitEvent(*event)
+			},
+			SubmitTo: func(topic string, data interface{}) {
+				eng.Submit(
+					mod.GetName(),
+					topic,
+					data)
+			},
+		},
+		SubscribeTo: func(topicName string, consumers []Consumer, performRegistration bool) error {
+			for _, consumer := range consumers {
+				if performRegistration {
+					eng.Register(consumer)
+				}
+				if err := eng.subscribeTo(topicName, consumer.Id); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
 	}
 
-	// Setup a submitter on the module so it can post
-	// data to the event bus as its [name].producer
-	mod.SetSubmitter(&ModuleSubmitter{
-		SubmitData: func(data interface{}) {
-			eng.Submit(
-				fmt.Sprintf("%s.producer", productionTarget.Name),
-				productionTarget.Name,
-				data)
-		},
-		SubmitEvent: func(event *Event) {
-			eng.SubmitEvent(*event)
-		},
-	})
-
-	// Register all consumers that the user gave us
-	// that will receive the events of the producer
-	for _, consumer := range consumers {
-		eng.Register(consumer)
-
-		if err := eng.subscribeTo(productionTarget.Name, consumer.Id); err != nil {
-			return err
+	for _, topic := range topics {
+		// Create topic that the module will publish on,
+		// and ensure that the module has a unique name
+		if err := eng.CreateTopic(topic); err != nil {
+			if errors.Is(err, ErrEngineDuplicateTopic) {
+				slog.Info("topic has already been created", "name", topic.Name)
+			} else {
+				panic("error creating topic for module")
+			}
 		}
 	}
 
-	eng.modules[productionTarget.Name] = mod
-	return nil
+	mod.RecvModulePane(&modp)
+
+	eng.modules[mod.GetName()] = mod
 }
