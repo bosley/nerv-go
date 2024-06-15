@@ -16,17 +16,24 @@ const (
 var ErrEngineAlreadyRunning = errors.New("engine already running")
 var ErrEngineNotRunning = errors.New("engine not running")
 var ErrEngineUnknownTopic = errors.New("unknown topic")
+var ErrEngineUnknownModule = errors.New("unknown module")
 var ErrEngineUnknownConsumer = errors.New("unknown consumer")
 var ErrEngineDuplicateTopic = errors.New("duplicate topic")
+
+type moduleMetaPair struct {
+	module Module
+	meta   interface{}
+}
 
 type Engine struct {
 	topics    map[string]*eventTopic
 	consumers map[string]EventRecvr
 
-	modules map[string]Module
+	mmp map[string]*moduleMetaPair
 
 	topicMu sync.Mutex
 	subMu   sync.Mutex
+	modMu   sync.Mutex
 	wg      sync.WaitGroup
 
 	eventChan chan Event
@@ -50,7 +57,7 @@ func NewEngine() *Engine {
 	eng := &Engine{
 		topics:    make(map[string]*eventTopic),
 		consumers: make(map[string]EventRecvr),
-		modules:   make(map[string]Module),
+		mmp:       make(map[string]*moduleMetaPair),
 		eventChan: make(chan Event),
 		running:   false,
 		callbacks: EngineCallbacks{
@@ -98,6 +105,30 @@ func (eng *Engine) ContainsConsumer(id *string) bool {
 	return ok
 }
 
+func (eng *Engine) SetModuleMeta(name string, data interface{}) error {
+	eng.modMu.Lock()
+	defer eng.modMu.Unlock()
+
+	mmp, ok := eng.mmp[name]
+	if !ok {
+		return ErrEngineUnknownModule
+	}
+	mmp.meta = data
+	return nil
+}
+
+func (eng *Engine) GetModuleMeta(name string) interface{} {
+	eng.modMu.Lock()
+	defer eng.modMu.Unlock()
+
+	mmp, ok := eng.mmp[name]
+	if !ok {
+		slog.Warn("attempt to retrieve meta for unknown module", "module", name)
+	}
+	// defaults to nil so w/e
+	return mmp.meta
+}
+
 func (eng *Engine) Start() error {
 
 	slog.Debug("Start", "running", eng.running)
@@ -130,9 +161,10 @@ func (eng *Engine) Start() error {
 		}
 	}()
 
-	for name, mod := range eng.modules {
-		slog.Debug("indicating start to module", "module", name)
-		mod.Start()
+	for name, mmp := range eng.mmp {
+		hasMeta := mmp.meta == nil
+		slog.Debug("indicating start to module", "module", name, "has_meta", hasMeta)
+		mmp.module.Start()
 	}
 
 	return nil
@@ -146,9 +178,9 @@ func (eng *Engine) Stop() error {
 		return ErrEngineNotRunning
 	}
 
-	for name, mod := range eng.modules {
+	for name, mmp := range eng.mmp {
 		slog.Debug("indicating shutdown to module", "module", name)
-		mod.Shutdown()
+		mmp.module.Shutdown()
 	}
 
 	close(eng.eventChan)
@@ -165,7 +197,7 @@ func (eng *Engine) checkCallback(fn EventRecvr, data interface{}) {
 		fn(&Event{
 			time.Now(),
 			"nerv.internal",
-			"nerv.engine",
+			"mmp.nerv.engine",
 			data,
 		})
 	}
@@ -391,6 +423,9 @@ func (eng *Engine) UseModule(
 	mod Module,
 	topics []*TopicCfg) {
 
+	eng.modMu.Lock()
+	defer eng.modMu.Unlock()
+
 	slog.Debug("setting up module", "name", mod.GetName())
 
 	modp := ModulePane{
@@ -416,6 +451,7 @@ func (eng *Engine) UseModule(
 			}
 			return nil
 		},
+		GetModuleMeta: eng.GetModuleMeta,
 	}
 
 	for _, topic := range topics {
@@ -432,5 +468,8 @@ func (eng *Engine) UseModule(
 
 	mod.RecvModulePane(&modp)
 
-	eng.modules[mod.GetName()] = mod
+	eng.mmp[mod.GetName()] = &moduleMetaPair{
+		module: mod,
+		meta:   nil,
+	}
 }

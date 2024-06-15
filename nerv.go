@@ -44,6 +44,10 @@ type ModulePane struct {
 
 	// The submitter functions
 	Submitter ModuleSubmitter
+
+	// Retrieve whatever meta-data the users stored
+	// with the module
+	GetModuleMeta func(moduleName string) interface{}
 }
 
 // Submission functions leveraged by modules

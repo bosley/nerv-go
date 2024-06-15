@@ -140,6 +140,7 @@ func makeDefaultHandler(id string, action func()) EventRecvr {
 func TestModules(t *testing.T) {
 
 	address := "127.0.0.1:20000"
+	modMetaData := 8675309
 
 	slog.SetDefault(
 		slog.New(
@@ -187,6 +188,10 @@ func TestModules(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 
+	if err := engine.SetModuleMeta(mod.GetName(), modMetaData); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
 	fmt.Println("starting engine")
 	if err := engine.Start(); err != nil {
 		t.Fatalf("err: %v", err)
@@ -211,6 +216,19 @@ func TestModules(t *testing.T) {
 	sender()
 
 	time.Sleep(1 * time.Second)
+
+	modMeta := engine.GetModuleMeta(mod.GetName())
+	if modMeta == nil {
+		t.Fatal("Unable to retrieve module meta data")
+	}
+
+	metaActual := modMeta.(int)
+
+	fmt.Println("retrieved module meta:", metaActual)
+
+	if metaActual != modMetaData {
+		t.Fatalf("expected %d, got %d for module meta", modMetaData, metaActual)
+	}
 
 	fmt.Println("stopping engine")
 	if err := engine.Stop(); err != nil {
