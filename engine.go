@@ -105,6 +105,43 @@ func (eng *Engine) ContainsConsumer(id *string) bool {
 	return ok
 }
 
+// A route is an abstraction over consumer/topic/producer to streamline the engine
+// interaction for smaller and/or simpler use-cases than a module.
+// Given the nature and purpose of Nerv, the producer handed back can be called
+// from any thread at any time worry-free as long as the engine is running
+func (eng *Engine) AddRoute(topic string, route Route) (Producer, error) {
+	routeId := fmt.Sprintf("route:%s", topic)
+	writerId := fmt.Sprintf("prod:%s", topic)
+
+	slog.Debug("add route", "topic", topic, "route-id", routeId, "producer-id", writerId)
+
+	if err := eng.CreateTopic(NewTopic(topic)); err != nil {
+		return nil, err
+	}
+
+	eng.Register(Consumer{
+		Id: routeId,
+		Fn: func(event *Event) {
+			route(&Context{
+				Event: event,
+			})
+		},
+	})
+
+	if err := eng.subscribeTo(topic, routeId); err != nil {
+		return nil, err
+	}
+
+	producer := func(data interface{}) error {
+		return eng.Submit(writerId, topic, data)
+	}
+
+	return producer, nil
+}
+
+// Store a piece of meta information for a module. This can help
+// users track information about their own modules and permit
+// inter-module communication of state
 func (eng *Engine) SetModuleMeta(name string, data interface{}) error {
 	eng.modMu.Lock()
 	defer eng.modMu.Unlock()
@@ -221,8 +258,6 @@ func (eng *Engine) SubmitEvent(event Event) error {
 
 	eng.eventChan <- event
 
-	slog.Debug("SUBMITTED")
-
 	go eng.checkCallback(eng.callbacks.SubmitCb, &event)
 	return nil
 }
@@ -300,8 +335,6 @@ func (eng *Engine) subscribeTo(topicId string, subId string) error {
 	if !tok {
 		return ErrEngineUnknownTopic
 	}
-
-	slog.Info("Adding consumer", "id", subId)
 
 	topic.subscribed = append(topic.subscribed, subscribedFn)
 

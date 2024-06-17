@@ -23,9 +23,9 @@ This module contains client and server functions along with an optional "authori
 can allow a user to filter out any submissions that have invalid or nonexistent API tokens, etc. See `modhttp_test.go` in
 the `modhttp` directory.
 
-## The Example
+## The Examples
 
-As a means to demonstrate/ test/ and debug nerv instances, the cli in `example` was made. This cli has daemon-like functionality
+As a means to demonstrate/ test/ and debug nerv instances, the cli in `examples/http_app` was made. This cli has daemon-like functionality
 along with shutdown timers (using the event engine via a `reaper`.) You can use this application to check the status of a nerv instance,
 run a nerv instance, submit events, and generally just use it to see what `nerv` is meant for.
 
@@ -83,3 +83,56 @@ Using api token with CLI:
 ```
 
 For examples of usage you can see `main.go` in cli/, or see `modhttp/modhttp_test.go`.
+
+## Routing
+
+For some async use-cases its not required for there to be a managed lifetime (live and die with engine),
+and there is not always a need to have access to engine controls from something that sends/ receives events.
+Sometimes it is preferred to just have a mechanism that can deliver events somewhere in-app. This is what
+the route functionality of the engine is for.
+
+```go
+
+package main
+
+import (
+  "fmt"
+  "github.com/bosley/nerv-go"
+)
+
+func main() {
+
+  engine := nerv.NewEngin()
+
+  producer, err := engine.AddRoute("/some/route/name", func (c *nerv.Context) {
+
+    fmt.Println("Received event generated at", c.Event.Spawned)
+  })
+
+  if err != nil {
+    panic(err.Error())
+  }
+
+  if err := engine.Start(); err != nil {
+    panic(err.Error())
+  }
+
+  // Now we can submit to that function at any time using `producer`
+
+  producer("My data")
+
+  time.Sleep(5 * time.Second)
+
+  if err := engine.Shutdown(); err != nil {
+    panic(err.Error())
+  }
+}
+
+```
+
+The example above doesn't shed much light on the usefulness here as its a bit
+of a contrived example. However, what we gain from this is that we can `produce`
+in a non-blocking way at any time from any thread without having to setup channels,
+workers, and controls, along with handing said structures around the application.
+
+While this is not the foundational reason nerv was created, it is a neat, and potentially useful feature.
