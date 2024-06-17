@@ -465,30 +465,30 @@ func TestDirectRandom(t *testing.T) {
 
 func TestRouting(t *testing.T) {
 
-  type tprod struct {
-    prod Producer
-    data int
-  }
-  numCases := 10
+	type tprod struct {
+		prod Producer
+		data int
+	}
+	numCases := 10
 
-  tc := make([]tprod, numCases)
+	tc := make([]tprod, numCases)
 
-  engine := NewEngine()
+	engine := NewEngine()
 
-  for x := 0; x < numCases; x++ {
-    tc[x].data = 0
+	for x := 0; x < numCases; x++ {
+		tc[x].data = 0
 
-    topic := fmt.Sprintf("/route/%d", x)
+		topic := fmt.Sprintf("/route/%d", x)
 
-    prod, err := engine.AddRoute(topic, func(c *Context) {
-      tc[x].data = c.Event.Data.(int)
-    })
+		prod, err := engine.AddRoute(topic, func(c *Context) {
+			tc[x].data = c.Event.Data.(int)
+		})
 
-    if err != nil {
-      t.Fatalf("err:%v", err)
-    }
-    tc[x].prod = prod
-  }
+		if err != nil {
+			t.Fatalf("err:%v", err)
+		}
+		tc[x].prod = prod
+	}
 
 	fmt.Println("starting engine")
 	if err := engine.Start(); err != nil {
@@ -498,13 +498,13 @@ func TestRouting(t *testing.T) {
 	fmt.Println("[ENGINE STARTED]")
 	fmt.Println("starting sends")
 
-  for x := 0; x < numCases; x++ {
-    if err := tc[x].prod(x); err != nil {
-      t.Fatalf("err: %v", err)
-    }
-  }
+	for x := 0; x < numCases; x++ {
+		if err := tc[x].prod(x); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}
 
-  time.Sleep(100 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	fmt.Println("stopping engine")
 
@@ -513,9 +513,9 @@ func TestRouting(t *testing.T) {
 	}
 	fmt.Println("[STOP COMPLETE]")
 
-  for x := 0; x < numCases; x++ {
-    if tc[x].data != x {
-      t.Fatal("route failed to update route-specific data")
-    }
-  }
+	for x := 0; x < numCases; x++ {
+		if tc[x].data != x {
+			t.Fatal("route failed to update route-specific data")
+		}
+	}
 }

@@ -110,33 +110,33 @@ func (eng *Engine) ContainsConsumer(id *string) bool {
 // Given the nature and purpose of Nerv, the producer handed back can be called
 // from any thread at any time worry-free as long as the engine is running
 func (eng *Engine) AddRoute(topic string, route Route) (Producer, error) {
-  routeId := fmt.Sprintf("route:%s", topic)
-  writerId := fmt.Sprintf("prod:%s", topic)
+	routeId := fmt.Sprintf("route:%s", topic)
+	writerId := fmt.Sprintf("prod:%s", topic)
 
-  slog.Debug("add route", "topic", topic, "route-id", routeId, "producer-id", writerId)
+	slog.Debug("add route", "topic", topic, "route-id", routeId, "producer-id", writerId)
 
-  if err := eng.CreateTopic(NewTopic(topic)); err != nil {
-    return nil, err
-  }
+	if err := eng.CreateTopic(NewTopic(topic)); err != nil {
+		return nil, err
+	}
 
-  eng.Register(Consumer {
-      Id: routeId,
-      Fn: func(event *Event) {
-        route(&Context {
-          Event: event,
-        })
-      },
-    })
+	eng.Register(Consumer{
+		Id: routeId,
+		Fn: func(event *Event) {
+			route(&Context{
+				Event: event,
+			})
+		},
+	})
 
-  if err := eng.subscribeTo(topic, routeId); err != nil {
-    return nil, err
-  }
+	if err := eng.subscribeTo(topic, routeId); err != nil {
+		return nil, err
+	}
 
-  producer := func(data interface{}) error {
-    return eng.Submit(writerId, topic, data)
-  }
+	producer := func(data interface{}) error {
+		return eng.Submit(writerId, topic, data)
+	}
 
-  return producer, nil
+	return producer, nil
 }
 
 // Store a piece of meta information for a module. This can help

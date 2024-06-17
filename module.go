@@ -34,4 +34,3 @@ type ModulePane struct {
 	// the original event
 	SubmitEvent EventRecvr
 }
-
