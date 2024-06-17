@@ -233,8 +233,6 @@ func TestDirectRoundRobin(t *testing.T) {
 	}
 	engine.Register(Consumer{actorA.Id(), actorA.Accept})
 
-	actorASubmitter := NewSubmissionHandler(engine, actorA.Id())
-
 	actorB := testActor{
 		name:  "B",
 		id:    1,
@@ -327,14 +325,14 @@ func TestDirectRoundRobin(t *testing.T) {
 	checkEventCount(actorC, 2)
 	checkEventCount(actorD, 2)
 
-	actorASubmitter.Submit(recvGroup, 6) // B
+	engine.Submit(actorA.Id(), recvGroup, 6)
 	time.Sleep(100 * time.Millisecond)
 
 	checkEventCount(actorB, 3)
 	checkEventCount(actorC, 2)
 	checkEventCount(actorD, 2)
 
-	actorASubmitter.Submit(recvGroup, 7) // B
+	engine.Submit(actorA.Id(), recvGroup, 7)
 	time.Sleep(100 * time.Millisecond)
 
 	checkEventCount(actorB, 3)
@@ -463,4 +461,61 @@ func TestDirectRandom(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 	fmt.Println("[STOP COMPLETE]")
+}
+
+func TestRouting(t *testing.T) {
+
+  type tprod struct {
+    prod Producer
+    data int
+  }
+  numCases := 10
+
+  tc := make([]tprod, numCases)
+
+  engine := NewEngine()
+
+  for x := 0; x < numCases; x++ {
+    tc[x].data = 0
+
+    topic := fmt.Sprintf("/route/%d", x)
+
+    prod, err := engine.AddRoute(topic, func(c *Context) {
+      tc[x].data = c.Event.Data.(int)
+    })
+
+    if err != nil {
+      t.Fatalf("err:%v", err)
+    }
+    tc[x].prod = prod
+  }
+
+	fmt.Println("starting engine")
+	if err := engine.Start(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	fmt.Println("[ENGINE STARTED]")
+	fmt.Println("starting sends")
+
+  for x := 0; x < numCases; x++ {
+    if err := tc[x].prod(x); err != nil {
+      t.Fatalf("err: %v", err)
+    }
+  }
+
+  time.Sleep(100 * time.Millisecond)
+
+	fmt.Println("stopping engine")
+
+	if err := engine.Stop(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	fmt.Println("[STOP COMPLETE]")
+
+  for x := 0; x < numCases; x++ {
+    if tc[x].data != x {
+      t.Fatal("route failed to update route-specific data")
+    }
+  }
 }

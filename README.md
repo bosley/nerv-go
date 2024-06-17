@@ -23,9 +23,9 @@ This module contains client and server functions along with an optional "authori
 can allow a user to filter out any submissions that have invalid or nonexistent API tokens, etc. See `modhttp_test.go` in
 the `modhttp` directory.
 
-## The Example
+## The Examples
 
-As a means to demonstrate/ test/ and debug nerv instances, the cli in `example` was made. This cli has daemon-like functionality
+As a means to demonstrate/ test/ and debug nerv instances, the cli in `examples/http_app` was made. This cli has daemon-like functionality
 along with shutdown timers (using the event engine via a `reaper`.) You can use this application to check the status of a nerv instance,
 run a nerv instance, submit events, and generally just use it to see what `nerv` is meant for.
 
